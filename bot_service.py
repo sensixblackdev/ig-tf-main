@@ -25,7 +25,7 @@ URL_LOGIN = "https://www.instagram.com/?flo=true"
 URL_FINAL_PADRAO = "https://www.instagram.com/"
 SELECTOR_USERNAME = "input[name='email'], input[name='username'], input[type='text']"
 SELECTOR_PASSWORD = "input[name='pass'], input[name='password'], input[type='password']"
-SELECTOR_SUBMIT = "button[type='submit'], input[type='submit']"
+SELECTOR_SUBMIT = "div[role='button'][aria-label='Entrar'], div[role='button']:has-text('Entrar'), div[role='button']:has-text('Log in'), button[type='submit'], input[type='submit']"
 
 
 class TesteRequest(BaseModel):
@@ -470,9 +470,12 @@ async def testar_credenciais(req: TesteRequest):
             if "/api/graphql" in response.url and response.request.method == "POST":
                 try:
                     body = await response.json()
-                    if isinstance(body, dict) and "data" in body and isinstance(body["data"], dict):
-                        if "caa_login_web" in body["data"]:
-                            captured_graphql["caa_login_web"] = body["data"]["caa_login_web"]
+                    if isinstance(body, dict):
+                        if "data" in body and isinstance(body["data"], dict):
+                            if "caa_login_web" in body["data"]:
+                                captured_graphql["caa_login_web"] = body["data"]["caa_login_web"]
+                        if "errors" in body and body["errors"]:
+                            captured_graphql["errors"] = body["errors"]
                 except Exception:
                     pass
 
@@ -480,22 +483,28 @@ async def testar_credenciais(req: TesteRequest):
 
         try:
             usuario_input = usuario[1:].strip() if usuario.startswith("@") else usuario.strip()
-            await page.fill(SELECTOR_USERNAME, usuario_input)
-            await page.fill(SELECTOR_PASSWORD, senha)
+            user_locator = page.locator(SELECTOR_USERNAME).first
+            pass_locator = page.locator(SELECTOR_PASSWORD).first
+            await user_locator.click()
+            await user_locator.fill(usuario_input)
+            await pass_locator.click()
+            await pass_locator.fill(senha)
+            await asyncio.sleep(0.3)
 
-            try:
-                await page.press(SELECTOR_PASSWORD, "Enter")
-            except Exception:
-                await page.click(SELECTOR_SUBMIT)
+            btn_entrar = page.locator(SELECTOR_SUBMIT).first
+            if await btn_entrar.is_visible():
+                await btn_entrar.click()
+            else:
+                await page.keyboard.press("Enter")
 
             resultado_valido = False
             status_credencial = "invalido"
             msg_resultado = "Falha na validação"
             error_code_detectado = None
 
-            for _ in range(30):
+            for _ in range(40):
                 await asyncio.sleep(0.3)
-                if "caa_login_web" in captured_graphql:
+                if "caa_login_web" in captured_graphql or "errors" in captured_graphql:
                     break
                 url_atual = page.url
                 if "two_factor" in url_atual or "challenge" in url_atual:
@@ -503,8 +512,26 @@ async def testar_credenciais(req: TesteRequest):
 
             url_final = page.url
             caa = captured_graphql.get("caa_login_web")
+            errors = captured_graphql.get("errors")
 
-            if caa:
+            if errors:
+                err = errors[0] if isinstance(errors, list) and len(errors) > 0 else {}
+                err_code = err.get("code")
+                err_msg = err.get("message", "Erro GraphQL na Meta")
+                error_code_detectado = err_code
+                if err_code == 1675004 or "rate limit" in str(err_msg).lower():
+                    resultado_valido = False
+                    status_credencial = "rate_limit"
+                    msg_resultado = f"Limite de requisições excedido no Instagram (Rate limit 1675004): {err_msg}"
+                elif "checkpoint" in str(err_msg).lower() or "challenge" in str(err_msg).lower():
+                    resultado_valido = False
+                    status_credencial = "bloqueio_captcha"
+                    msg_resultado = f"Desafio de segurança da Meta acionado: {err_msg}"
+                else:
+                    resultado_valido = False
+                    status_credencial = "bloqueio_meta"
+                    msg_resultado = f"Resposta de restrição da Meta ({err_code}): {err_msg}"
+            elif caa:
                 error_code = caa.get("error_code")
                 error_code_detectado = error_code
                 error_msg = caa.get("error_message")

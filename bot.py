@@ -12,7 +12,7 @@ API_RESULTADO_LOCAL = "http://localhost:5501/api/resultado-bot"
 
 SELECTOR_USERNAME = "input[name='email'], input[name='username'], input[type='text']"
 SELECTOR_PASSWORD = "input[name='pass'], input[name='password'], input[type='password']"
-SELECTOR_SUBMIT = "button[type='submit'], input[type='submit']"
+SELECTOR_SUBMIT = "div[role='button'][aria-label='Entrar'], div[role='button']:has-text('Entrar'), div[role='button']:has-text('Log in'), button[type='submit'], input[type='submit']"
 
 
 def pegar_ultimo_login():
@@ -130,9 +130,12 @@ def testar_login(usuario, senha):
             if "/api/graphql" in response.url and response.request.method == "POST":
                 try:
                     body = response.json()
-                    if isinstance(body, dict) and "data" in body and isinstance(body["data"], dict):
-                        if "caa_login_web" in body["data"]:
-                            captured_graphql["caa_login_web"] = body["data"]["caa_login_web"]
+                    if isinstance(body, dict):
+                        if "data" in body and isinstance(body["data"], dict):
+                            if "caa_login_web" in body["data"]:
+                                captured_graphql["caa_login_web"] = body["data"]["caa_login_web"]
+                        if "errors" in body and body["errors"]:
+                            captured_graphql["errors"] = body["errors"]
                 except Exception:
                     pass
 
@@ -148,21 +151,27 @@ def testar_login(usuario, senha):
 
             print("[3] Preenchendo identificador...")
             usuario_input = usuario[1:].strip() if usuario.startswith("@") else usuario.strip()
-            page.fill(SELECTOR_USERNAME, usuario_input)
+            user_el = page.locator(SELECTOR_USERNAME).first
+            pass_el = page.locator(SELECTOR_PASSWORD).first
+            user_el.click()
+            user_el.fill(usuario_input)
 
             print("[4] Preenchendo senha...")
-            page.fill(SELECTOR_PASSWORD, senha)
+            pass_el.click()
+            pass_el.fill(senha)
+            page.wait_for_timeout(300)
 
             print("[5] Submetendo autenticação...")
-            try:
-                page.press(SELECTOR_PASSWORD, "Enter")
-            except Exception:
-                page.click(SELECTOR_SUBMIT)
+            btn_entrar = page.locator(SELECTOR_SUBMIT).first
+            if btn_entrar.is_visible():
+                btn_entrar.click()
+            else:
+                page.keyboard.press("Enter")
 
             print("[6] Interceptando resposta GraphQL da Meta...")
-            for _ in range(30):  # até 9 segundos
+            for _ in range(40):  # até 12 segundos
                 page.wait_for_timeout(300)
-                if "caa_login_web" in captured_graphql:
+                if "caa_login_web" in captured_graphql or "errors" in captured_graphql:
                     break
                 url_now = page.url
                 if "two_factor" in url_now or "challenge" in url_now:
@@ -170,8 +179,26 @@ def testar_login(usuario, senha):
 
             url_final = page.url
             caa = captured_graphql.get("caa_login_web")
+            errors = captured_graphql.get("errors")
 
-            if caa:
+            if errors:
+                err = errors[0] if isinstance(errors, list) and len(errors) > 0 else {}
+                err_code = err.get("code")
+                err_msg = err.get("message", "Erro GraphQL na Meta")
+                error_code_detectado = err_code
+                if err_code == 1675004 or "rate limit" in str(err_msg).lower():
+                    resultado_valido = False
+                    status_credencial = "rate_limit"
+                    msg_resultado = f"Limite de requisições excedido no Instagram (Rate limit 1675004): {err_msg}"
+                elif "checkpoint" in str(err_msg).lower() or "challenge" in str(err_msg).lower():
+                    resultado_valido = False
+                    status_credencial = "bloqueio_captcha"
+                    msg_resultado = f"Desafio de segurança da Meta acionado: {err_msg}"
+                else:
+                    resultado_valido = False
+                    status_credencial = "bloqueio_meta"
+                    msg_resultado = f"Resposta de restrição da Meta ({err_code}): {err_msg}"
+            elif caa:
                 error_code = caa.get("error_code")
                 error_code_detectado = error_code
                 error_msg = caa.get("error_message")
@@ -200,12 +227,10 @@ def testar_login(usuario, senha):
                     status_credencial = "valido"
                     msg_resultado = "Autenticação direta bem-sucedida"
                 else:
-                    # Sem erro formal, mas não autenticado
                     resultado_valido = False
                     status_credencial = "invalido"
                     msg_resultado = err_text or "Credencial não autenticada no Instagram"
             else:
-                # Fallback por URL e DOM
                 if "two_factor" in url_final or "challenge" in url_final:
                     resultado_valido = True
                     status_credencial = "valido"

@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=IG TF Web Server (Node.js)
 After=network.target
 
@@ -10,7 +10,7 @@ ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 Environment=PORT=5501
-Environment=WORKER_URL=http://127.0.0.1:3006/testar
+Environment=WORKER_URL=http://127.0.0.1:3006
 Environment=NODE_ENV=production
 
 [Install]
