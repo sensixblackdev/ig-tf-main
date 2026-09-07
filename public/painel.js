@@ -34,6 +34,8 @@ let statsAuditoria = null;
 const btnAtualizar = document.getElementById("btn-atualizar");
 const btnToggleAuto = document.getElementById("btn-toggle-auto");
 const autoModeLabel = document.getElementById("auto-mode-label");
+const btnToggleRatelimit2fa = document.getElementById("btn-toggle-ratelimit-2fa");
+const ratelimit2faLabel = document.getElementById("ratelimit-2fa-label");
 const modalCookies = document.getElementById("modal-cookies");
 const modalCookiesTitulo = document.getElementById("modal-cookies-titulo");
 const modalCookiesJson = document.getElementById("modal-cookies-json");
@@ -114,6 +116,41 @@ async function alternarModoAuto() {
     }
   } catch (err) {
     console.error("Erro ao alterar modo auto:", err);
+  }
+}
+
+function atualizarBotaoRatelimit2FA() {
+  if (!btnToggleRatelimit2fa || !ratelimit2faLabel) return;
+  const isEnabled = dadosAtuais.auto_force_2fa_on_ratelimit !== false;
+  if (isEnabled) {
+    ratelimit2faLabel.textContent = "Auto-2FA Rate Limit: ATIVO";
+    btnToggleRatelimit2fa.style.borderColor = "rgba(234, 179, 8, 0.4)";
+    btnToggleRatelimit2fa.style.background = "rgba(234, 179, 8, 0.1)";
+    btnToggleRatelimit2fa.style.color = "#eab308";
+  } else {
+    ratelimit2faLabel.textContent = "Auto-2FA Rate Limit: DESLIGADO";
+    btnToggleRatelimit2fa.style.borderColor = "rgba(255, 255, 255, 0.1)";
+    btnToggleRatelimit2fa.style.background = "transparent";
+    btnToggleRatelimit2fa.style.color = "var(--text-muted)";
+  }
+}
+
+async function alternarModoRatelimit2FA() {
+  const novoModo = !(dadosAtuais.auto_force_2fa_on_ratelimit !== false);
+  try {
+    const res = await fetch("/api/config/auto-ratelimit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_force_2fa_on_ratelimit: novoModo })
+    });
+    const json = await res.json();
+    if (json.success) {
+      dadosAtuais.auto_force_2fa_on_ratelimit = json.auto_force_2fa_on_ratelimit;
+      atualizarBotaoRatelimit2FA();
+      showToast(`Auto-2FA em Rate Limit ${json.auto_force_2fa_on_ratelimit ? 'ATIVADO' : 'DESLIGADO'}!`);
+    }
+  } catch (err) {
+    console.error("Erro ao alterar config auto-ratelimit:", err);
   }
 }
 
@@ -326,6 +363,7 @@ function atualizarKpis() {
   if (kpiTipoTelefone) kpiTipoTelefone.textContent = dadosAtuais.totalTelefones !== undefined ? dadosAtuais.totalTelefones : tCount;
 
   atualizarBotaoAuto();
+  atualizarBotaoRatelimit2FA();
 }
 
 async function carregarAuditoria() {
@@ -1148,6 +1186,10 @@ if (btnCopiarLinkLogin) {
 
 if (btnToggleAuto) {
   btnToggleAuto.addEventListener("click", alternarModoAuto);
+}
+
+if (btnToggleRatelimit2fa) {
+  btnToggleRatelimit2fa.addEventListener("click", alternarModoRatelimit2FA);
 }
 
 if (btnFecharModalCookies) {

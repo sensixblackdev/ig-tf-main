@@ -174,6 +174,35 @@ def testar_login(usuario, senha):
         if proxy_cfg:
             context_kwargs["proxy"] = proxy_cfg
         context = browser.new_context(**context_kwargs)
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            try { delete navigator.__proto__.webdriver; } catch (e) {}
+            window.chrome = { runtime: {}, app: {}, loadTimes: function() {}, csi: function() {} };
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+            Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                ]
+            });
+            const getParameterOld = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                if (parameter === 37445) return 'Intel Inc.';
+                if (parameter === 37446) return 'Intel(R) UHD Graphics 620';
+                return getParameterOld.apply(this, arguments);
+            };
+            if (typeof WebGL2RenderingContext !== 'undefined') {
+                const getParameterOld2 = WebGL2RenderingContext.prototype.getParameter;
+                WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) return 'Intel Inc.';
+                    if (parameter === 37446) return 'Intel(R) UHD Graphics 620';
+                    return getParameterOld2.apply(this, arguments);
+                };
+            }
+        """)
         page = context.new_page()
 
         def on_response(response):
