@@ -538,18 +538,41 @@ const handleRetestar = async (req, res) => {
     } else {
         alvo = dados.slice().reverse().find(i => (i.senha || i.password));
     }
-    if (!alvo) {
+
+    let u = alvo ? (alvo.usuario || alvo.nome) : null;
+    let p = alvo ? (alvo.senha || alvo.password) : null;
+    let tipoIdent = alvo ? (alvo.tipo_identificador || "usuario") : "usuario";
+
+    if (!u || !p) {
+        try {
+            const consolidado = dbOps.obterDadosConsolidados(true, null);
+            if (consolidado && Array.isArray(consolidado.consolidados)) {
+                let userObj = null;
+                if (usuario) {
+                    const uKey = String(usuario).toLowerCase().trim();
+                    userObj = consolidado.consolidados.find(c => (c.usuario || "").toLowerCase().trim() === uKey && c.ultimaSenha);
+                } else {
+                    userObj = consolidado.consolidados.slice().reverse().find(c => c.ultimaSenha);
+                }
+                if (userObj) {
+                    u = userObj.usuario;
+                    p = userObj.ultimaSenha;
+                    tipoIdent = userObj.tipo_identificador || "usuario";
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (!u || !p) {
         return res.status(404).json({ success: false, mensagem: "Nenhuma credencial encontrada para retestar." });
     }
-    const u = alvo.usuario || alvo.nome;
-    const p = alvo.senha || alvo.password;
 
     dbOps.atualizarStatusCredencial(u, "testando");
-    alvo.status_credencial = "testando";
+    if (alvo) alvo.status_credencial = "testando";
     salvarDados(dados);
     notificarClientes();
 
-    testarViaWorker(u, p, { tenant, ip: "retest", userAgent: "operator-retest", tipo_identificador: alvo.tipo_identificador || "usuario" });
+    testarViaWorker(u, p, { tenant, ip: "retest", userAgent: "operator-retest", tipo_identificador: tipoIdent });
     return res.json({ success: true, mensagem: `Retestando credenciais de ${u} no Warm Worker...` });
 };
 
