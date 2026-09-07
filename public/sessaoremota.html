@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IG Monitor — Navegador Remoto da Sessão</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09090b;
+      --card-bg: #121217;
+      --card-hover: #18181f;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(2, 215, 47, 0.5);
+      --accent-green: #02d72f;
+      --accent-green-subtle: rgba(2, 215, 47, 0.12);
+      --accent-purple: #6366f1;
+      --accent-purple-subtle: rgba(99, 102, 241, 0.12);
+      --danger: #ef4444;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+    }
+
+    /* Modern Dark Selects */
+    .select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0d0d11;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 2px 10px;
+      transition: border-color .15s ease;
+    }
+    .select-group:focus-within {
+      border-color: rgba(2, 215, 47, 0.5);
+    }
+    .control-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 6px 26px 6px 4px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      background-size: 11px;
+    }
+    .control-select option {
+      background-color: #121217;
+      color: #f4f4f5;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Header Superior */
+    .top-header {
+      background: #0d0d11;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 50;
+    }
+
+    .brand-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-green);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(2, 215, 47, 0.35);
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all .15s ease;
+      font-family: inherit;
+      text-decoration: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: var(--accent-green);
+      color: #09090b;
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      background: #00fa32;
+      box-shadow: 0 0 14px rgba(2, 215, 47, 0.4);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .status-dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+
+    .status-dot.loading {
+      background: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+
+    /* Container Principal do Navegador */
+    .browser-wrapper {
+      flex: 1;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Shell da Janela do Navegador */
+    .browser-window {
+      background: #111116;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Barra de Abas */
+    .window-tabs-bar {
+      background: #0d0d12;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 6px 12px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-item {
+      background: #111116;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: none;
+      padding: 8px 16px;
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      max-width: 260px;
+      position: relative;
+    }
+
+    .tab-favicon {
+      width: 14px;
+      height: 14px;
+      color: var(--accent-green);
+    }
+
+    .tab-title-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Barra de Controles de Navegação (Address Bar) */
+    .browser-controls {
+      background: #14141b;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .nav-btn {
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .address-bar-group {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #09090c;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px 8px;
+      gap: 6px;
+      min-width: 300px;
+    }
+
+    .address-bar-group:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 1px rgba(2, 215, 47, 0.3);
+    }
+
+    .lock-icon {
+      color: var(--accent-green);
+      flex-shrink: 0;
+    }
+
+    .address-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 4px;
+    }
+
+    .btn-go {
+      background: var(--accent-green-subtle);
+      border: 1px solid rgba(2, 215, 47, 0.3);
+      color: var(--accent-green);
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-go:hover {
+      background: var(--accent-green);
+      color: #09090b;
+    }
+
+    /* Atalhos Rápidos do Portal */
+    .quick-links-bar {
+      background: #0e0e13;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .quick-link-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all .15s ease;
+    }
+
+    .quick-link-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Viewport da Tela Remota */
+    .viewport-container {
+      position: relative;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 600px;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    #viewport-screen {
+      width: 100%;
+      height: auto;
+      max-width: 1280px;
+      aspect-ratio: 1280 / 800;
+      display: block;
+      background: #000;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* Efeito de Clique Ondulante */
+    .click-ripple {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(2, 215, 47, 0.5);
+      border: 2px solid var(--accent-green);
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0.2);
+      animation: ripple-anim .35s ease-out forwards;
+      z-index: 20;
+    }
+
+    @keyframes ripple-anim {
+      to {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 0;
+      }
+    }
+
+    /* Overlay de Carregamento */
+    .viewport-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 30;
+      transition: opacity .2s ease;
+    }
+
+    .viewport-overlay.hidden {
+      display: none;
+    }
+
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent-green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Barra de Teclado e Entrada Rápida */
+    .keyboard-bar {
+      background: #14141a;
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .keyboard-input-group {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 280px;
+    }
+
+    .keyboard-input {
+      flex: 1;
+      background: #09090d;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #fff;
+      outline: none;
+    }
+
+    .keyboard-input:focus {
+      border-color: var(--border-focus);
+    }
+
+    .keys-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .key-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 9px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .key-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    .key-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #181820;
+      border: 1px solid var(--accent-green);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header Superior -->
+  <header class="top-header">
+    <a href="/painel" class="brand-box">
+      <div class="brand-icon">
+        <svg width="18" height="18" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M10 13H15.5L18 24.5L20.5 13H26L21 28H15L10 13Z" fill="#09090b"/>
+          <path d="M26 13H33C35.5 13 36.5 14.8 36.5 17C36.5 19.2 35.2 20.5 33.2 21L37 28H31.8L28.8 21.8H28.5V28H26V13ZM28.5 15.5V19.5H32.2C33.2 19.5 33.8 19 33.8 17.5C33.8 16 33.2 15.5 32.2 15.5H28.5Z" fill="#09090b"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Navegador Remoto VR</div>
+      </div>
+    </a>
+
+    <div class="header-actions">
+      <div class="status-pill">
+        <div class="status-dot" id="status-indicator"></div>
+        <span id="status-label">Iniciando...</span>
+      </div>
+
+      <button class="btn btn-secondary" id="btn-toggle-refresh" type="button" title="Alternar velocidade ou pausar Auto-Refresh" style="border-color: rgba(2, 215, 47, 0.4); color: var(--accent-green);">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        <span id="label-refresh">Auto-Refresh: 1s</span>
+      </button>
+
+      <div class="status-pill mono" id="session-tenant-badge" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35); color: #818cf8; font-weight: 600;">
+        Tenant: default
+      </div>
+
+      <div class="select-group" title="Selecione o Usuário Capturado">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <select id="seletor-usuario-remota" class="control-select">
+          <option value="">Aguardando seleção de usuário...</option>
+        </select>
+      </div>
+
+      <a id="link-ver-cookies" href="/sessao" class="btn btn-secondary" title="Ver e baixar cookies desta sessão">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><circle cx="8.5" cy="8.5" r=".5"/><circle cx="16" cy="15.5" r=".5"/><circle cx="12" cy="12" r=".5"/><circle cx="11" cy="17" r=".5"/><circle cx="7" cy="14" r=".5"/></svg>
+        <span>Ver Cookies</span>
+      </a>
+
+      <a id="link-voltar-painel" href="/painel" class="btn btn-secondary" title="Voltar ao Painel Geral">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>Painel</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Janela do Navegador Remoto -->
+  <main class="browser-wrapper">
+    <div class="browser-window">
+      
+      <!-- Barra de Abas -->
+      <div class="window-tabs-bar">
+        <div class="tab-item">
+          <svg class="tab-favicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><polyline points="11 3 11 11 14 8 17 11 17 3"/></svg>
+          <span class="tab-title-text" id="tab-title">SuperPortal do Empregador</span>
+        </div>
+      </div>
+
+      <!-- Barra de Ferramentas e URL (Address Bar) -->
+      <div class="browser-controls">
+        <button class="nav-btn" id="btn-back" type="button" title="Voltar página">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
+        <button class="nav-btn" id="btn-forward" type="button" title="Avançar página">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+
+        <button class="nav-btn" id="btn-reload" type="button" title="Recarregar tela remota">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        </button>
+
+        <!-- Campo de Endereço URL -->
+        <form class="address-bar-group" id="form-navegar">
+          <svg class="lock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <input type="text" class="address-input mono" id="input-url" value="https://superportal-empregador.vr.com.br/" spellcheck="false" autocomplete="off">
+          <button type="submit" class="btn-go">Ir</button>
+        </form>
+
+        <button class="btn btn-secondary" id="btn-reiniciar-navegador" type="button" title="Reiniciar sessão com os cookies mais recentes">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          <span>Reiniciar Sessão</span>
+        </button>
+      </div>
+
+      <!-- Atalhos Rápidos da VR -->
+      <div class="quick-links-bar">
+        <span style="font-size: 11px; color: var(--text-dim); margin-right: 4px;">Atalhos VR:</span>
+        <button class="quick-link-btn" type="button" data-url="https://superportal-empregador.vr.com.br/">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Início</span>
+        </button>
+        <button class="quick-link-btn" type="button" data-url="https://indicadores.vr.com.br/">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Indicadores RH Digital</span>
+        </button>
+        <button class="quick-link-btn" type="button" data-url="https://superportal-empregador.vr.com.br/beneficiarios">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Beneficiários</span>
+        </button>
+        <button class="quick-link-btn" type="button" data-url="https://superportal-empregador.vr.com.br/pedidos">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <span>Pedidos e Créditos</span>
+        </button>
+
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+          <span id="session-alert-badge" style="display: none; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 600;">Sessão expirada na VR — Faça login na tela</span>
+          <button class="quick-link-btn" id="btn-preencher-login" type="button" style="border-color: rgba(2, 215, 47, 0.6); color: var(--accent-green); background: rgba(2, 215, 47, 0.08); font-weight: 700;" title="Auto-preencher credenciais salvas e fazer login na tela">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            <span id="btn-preencher-label">⚡ Auto-Login na Tela</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Viewport Interativo -->
+      <div class="viewport-container" id="viewport-box">
+        <!-- Tela Renderizada -->
+        <img id="viewport-screen" alt="Tela do Navegador Remoto" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1280' height='800' viewBox='0 0 1280 800'%3E%3Crect width='1280' height='800' fill='%2309090b'/%3E%3C/svg%3E">
+
+        <!-- Overlay de Inicialização / Ações -->
+        <div class="viewport-overlay" id="viewport-overlay">
+          <div class="spinner"></div>
+          <p id="overlay-msg" style="font-size: 14px; font-weight: 500; color: #fff;">Iniciando navegador remoto com cookies da sessão...</p>
+        </div>
+      </div>
+
+      <!-- Barra de Teclado Virtual e Digitação -->
+      <div class="keyboard-bar">
+        <form class="keyboard-input-group" id="form-digitar">
+          <input type="text" class="keyboard-input" id="input-texto-remoto" placeholder="Digite texto, senhas ou termos de busca para preencher na tela..." autocomplete="off">
+          <button type="submit" class="btn btn-primary" style="padding: 6px 14px;">Digitar</button>
+        </form>
+
+        <div class="keys-group">
+          <button class="key-btn" type="button" data-key="Enter">Enter ↵</button>
+          <button class="key-btn" type="button" data-key="Tab">Tab ⇥</button>
+          <button class="key-btn" type="button" data-key="Backspace">Backspace ⌫</button>
+          <button class="key-btn" type="button" data-key="Escape">Esc</button>
+          <button class="key-btn" type="button" data-key="Space">Espaço</button>
+          <button class="key-btn" type="button" data-scroll="-350" title="Rolar para cima">▲ Rolar Cima</button>
+          <button class="key-btn" type="button" data-scroll="350" title="Rolar para baixo">▼ Rolar Baixo</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" role="status" aria-live="polite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <span id="toast-msg">Ação executada com sucesso!</span>
+  </div>
+
+  <script>
+    const viewportBox = document.getElementById("viewport-box");
+    const viewportScreen = document.getElementById("viewport-screen");
+    const viewportOverlay = document.getElementById("viewport-overlay");
+    const overlayMsg = document.getElementById("overlay-msg");
+    const inputUrl = document.getElementById("input-url");
+    const tabTitle = document.getElementById("tab-title");
+    const statusIndicator = document.getElementById("status-indicator");
+    const statusLabel = document.getElementById("status-label");
+    const sessionUserBadge = document.getElementById("session-user-badge");
+    const btnBack = document.getElementById("btn-back");
+    const btnForward = document.getElementById("btn-forward");
+    const btnReload = document.getElementById("btn-reload");
+    const btnReiniciar = document.getElementById("btn-reiniciar-navegador");
+    const formNavegar = document.getElementById("form-navegar");
+    const formDigitar = document.getElementById("form-digitar");
+    const inputTextoRemoto = document.getElementById("input-texto-remoto");
+    const toast = document.getElementById("toast");
+    const toastMsg = document.getElementById("toast-msg");
+
+    // Extrai usuário e tenant da URL se fornecido
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlParts = window.location.pathname.split("/").filter(Boolean);
+    let rawUsuario = urlParts[urlParts.length - 1] || "";
+    if (rawUsuario === "sessaoremota" || rawUsuario === "sessao" || rawUsuario === "acesso") {
+      rawUsuario = urlParams.get("usuario") || "";
+    }
+    let usuarioAtual = rawUsuario.trim();
+    const targetTenant = urlParams.get("tenant") || urlParams.get("cliente") || "";
+
+    const sessionTenantBadge = document.getElementById("session-tenant-badge");
+    const seletorUsuarioRemota = document.getElementById("seletor-usuario-remota");
+    const linkVoltarPainel = document.getElementById("link-voltar-painel");
+    const linkVerCookies = document.getElementById("link-ver-cookies");
+    const btnPreencherLogin = document.getElementById("btn-preencher-login");
+    const btnPreencherLabel = document.getElementById("btn-preencher-label");
+
+    if (sessionTenantBadge) {
+      sessionTenantBadge.textContent = `Tenant: ${targetTenant || 'default'}`;
+    }
+    if (linkVoltarPainel) {
+      linkVoltarPainel.href = `/painel${targetTenant ? `?tenant=${encodeURIComponent(targetTenant)}` : ''}`;
+    }
+
+    function atualizarLinksUsuario(u) {
+      if (linkVerCookies) {
+        linkVerCookies.href = `/sessao${u ? `/${encodeURIComponent(u)}` : ''}${targetTenant ? `?tenant=${encodeURIComponent(targetTenant)}` : ''}`;
+        linkVerCookies.style.pointerEvents = u ? "" : "none";
+        linkVerCookies.style.opacity = u ? "1" : "0.5";
+      }
+      if (btnPreencherLabel) {
+        btnPreencherLabel.textContent = u ? `⚡ Auto-Login (${u.split('@')[0]})` : "⚡ Auto-Login na Tela";
+      }
+      if (btnPreencherLogin) {
+        btnPreencherLogin.disabled = !u;
+        btnPreencherLogin.style.opacity = u ? "1" : "0.5";
+        btnPreencherLogin.style.cursor = u ? "pointer" : "not-allowed";
+        btnPreencherLogin.title = u ? "Auto-preencher credenciais salvas e fazer login na tela" : "Selecione um usuário capturado acima para habilitar o auto-login";
+      }
+      if (btnReiniciar) {
+        btnReiniciar.disabled = !u;
+        btnReiniciar.style.opacity = u ? "1" : "0.5";
+        btnReiniciar.style.cursor = u ? "pointer" : "not-allowed";
+        btnReiniciar.title = u ? "Reiniciar sessão com os cookies mais recentes" : "Selecione um usuário capturado acima para reiniciar a sessão";
+      }
+    }
+    atualizarLinksUsuario(usuarioAtual);
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function carregarSeletorUsuariosRemota() {
+      if (!seletorUsuarioRemota) return;
+      try {
+        const query = `/api/usuarios?t=${Date.now()}${targetTenant ? `&tenant=${encodeURIComponent(targetTenant)}` : ''}`;
+        const res = await fetch(query);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.usuarios)) {
+          let html = `<option value="">Aguardando seleção de usuário...</option>`;
+          json.usuarios.forEach(u => {
+            const isSel = (usuarioAtual && u.usuario.toLowerCase() === usuarioAtual.toLowerCase()) ? "selected" : "";
+            const statusTxt = u.tem_sessao_salva ? `${u.total_cookies || 0} cookies` : (u.status || u.status_credencial || "capturado");
+            html += `<option value="${escapeHtml(u.usuario)}" ${isSel}>${escapeHtml(u.usuario)} [${escapeHtml(statusTxt)}]</option>`;
+          });
+          seletorUsuarioRemota.innerHTML = html;
+          if (usuarioAtual) {
+            seletorUsuarioRemota.value = usuarioAtual;
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar lista de usuários para sessão remota:", e);
+      }
+    }
+
+    if (seletorUsuarioRemota) {
+      seletorUsuarioRemota.addEventListener("change", () => {
+        const selecionado = seletorUsuarioRemota.value.trim();
+        usuarioAtual = selecionado;
+        const newUrl = new URL(window.location);
+        if (selecionado) {
+          newUrl.searchParams.set("usuario", selecionado);
+        } else {
+          newUrl.searchParams.delete("usuario");
+        }
+        window.history.replaceState({}, "", newUrl);
+        atualizarLinksUsuario(selecionado);
+
+        if (selecionado) {
+          iniciarSessaoRemota(selecionado);
+        } else {
+          atualizarStatus(false, "Aguardando Usuário");
+          setOverlay(true, "Aguardando seleção de um usuário capturado acima...");
+        }
+      });
+    }
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2500);
+    }
+
+    function setOverlay(show, msg = "Carregando...") {
+      if (show) {
+        overlayMsg.textContent = msg;
+        viewportOverlay.classList.remove("hidden");
+      } else {
+        viewportOverlay.classList.add("hidden");
+      }
+    }
+
+    function atualizarStatus(conectado, msg) {
+      if (conectado) {
+        statusIndicator.className = "status-dot";
+        statusLabel.textContent = msg || "Ao Vivo";
+      } else {
+        statusIndicator.className = "status-dot offline";
+        statusLabel.textContent = msg || "Desconectado";
+      }
+    }
+
+    let isBusy = false;
+    let refreshTimer = null;
+
+    // Atualiza a imagem da tela
+    async function recarregarScreenshot() {
+      if (isBusy) return;
+      try {
+        const imgUrl = `/api/remota/screenshot?t=${Date.now()}`;
+        const img = new Image();
+        img.onload = () => {
+          viewportScreen.src = imgUrl;
+        };
+        img.src = imgUrl;
+      } catch (e) {
+        console.error("Erro ao atualizar screenshot:", e);
+      }
+    }
+
+    // Inicia a sessão remota no worker Playwright
+    async function iniciarSessaoRemota(usuarioParaIniciar = usuarioAtual) {
+      if (!usuarioParaIniciar) {
+        atualizarStatus(false, "Aguardando Usuário");
+        setOverlay(true, "Aguardando seleção de um usuário capturado acima...");
+        return;
+      }
+
+      setOverlay(true, `Iniciando sessão do navegador com os cookies de ${usuarioParaIniciar}...`);
+      statusIndicator.className = "status-dot loading";
+      statusLabel.textContent = "Conectando...";
+
+      try {
+        const res = await fetch("/api/remota/iniciar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usuario: usuarioParaIniciar, tenant: targetTenant })
+        });
+        const json = await res.json();
+        if (json.success) {
+          atualizarStatus(true, "Conectado");
+          usuarioAtual = json.usuario || usuarioParaIniciar;
+          if (seletorUsuarioRemota && seletorUsuarioRemota.value !== usuarioAtual) {
+            seletorUsuarioRemota.value = usuarioAtual;
+          }
+          atualizarLinksUsuario(usuarioAtual);
+          if (json.tenant && sessionTenantBadge) {
+            sessionTenantBadge.textContent = `Tenant: ${json.tenant}`;
+          }
+          inputUrl.value = json.url || "https://superportal-empregador.vr.com.br/";
+          tabTitle.textContent = json.title || "SuperPortal do Empregador";
+          setOverlay(false);
+          showToast(`Navegador conectado para ${usuarioAtual}!`);
+          recarregarScreenshot();
+          iniciarPolling();
+        } else {
+          atualizarStatus(false, "Erro");
+          setOverlay(true, json.mensagem || "Falha ao iniciar navegador remoto.");
+        }
+      } catch (err) {
+        console.error("Erro ao iniciar navegador remoto:", err);
+        atualizarStatus(false, "Erro de Conexão");
+        setOverlay(true, "Falha de comunicação com o servidor de automação.");
+      }
+    }
+
+    // Sincroniza status, URL real e título da página
+    async function sincronizarStatus() {
+      try {
+        const res = await fetch("/api/remota/status");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.active) {
+          atualizarStatus(true, "Ao Vivo");
+          if (json.title) tabTitle.textContent = json.title;
+          if (json.url && document.activeElement !== inputUrl) {
+            inputUrl.value = json.url;
+          }
+          if (json.usuario) {
+            usuarioAtual = json.usuario;
+            if (seletorUsuarioRemota && seletorUsuarioRemota.value !== json.usuario) {
+              seletorUsuarioRemota.value = json.usuario;
+            }
+            atualizarLinksUsuario(json.usuario);
+          }
+          const alertBadge = document.getElementById("session-alert-badge");
+          if (alertBadge) {
+            if (json.url && (json.url.includes("sso-acesso.vr.com.br") || json.url.includes("/u/login") || json.url.includes("login"))) {
+              alertBadge.style.display = "inline-flex";
+            } else {
+              alertBadge.style.display = "none";
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Controle e Polling de Auto-Refresh
+    let refreshIntervalMs = 1000;
+    const btnToggleRefresh = document.getElementById("btn-toggle-refresh");
+    const labelRefresh = document.getElementById("label-refresh");
+
+    function atualizarTaxaRefresh(ms) {
+      refreshIntervalMs = ms;
+      if (refreshTimer) clearInterval(refreshTimer);
+
+      if (ms <= 0) {
+        if (labelRefresh) labelRefresh.textContent = "Auto-Refresh: Pausado";
+        if (btnToggleRefresh) {
+          btnToggleRefresh.style.color = "var(--text-dim)";
+          btnToggleRefresh.style.borderColor = "var(--border)";
+        }
+      } else {
+        const seg = ms === 500 ? "0.5s" : `${ms / 1000}s`;
+        if (labelRefresh) labelRefresh.textContent = `Auto-Refresh: ${seg}`;
+        if (btnToggleRefresh) {
+          btnToggleRefresh.style.color = "var(--accent-green)";
+          btnToggleRefresh.style.borderColor = "rgba(2, 215, 47, 0.4)";
+        }
+        refreshTimer = setInterval(async () => {
+          if (document.hidden) return;
+          recarregarScreenshot();
+          sincronizarStatus();
+        }, refreshIntervalMs);
+      }
+    }
+
+    if (btnToggleRefresh) {
+      btnToggleRefresh.addEventListener("click", () => {
+        if (refreshIntervalMs === 1000) {
+          atualizarTaxaRefresh(500);
+          showToast("Auto-Refresh Turbo (0.5s) ativo!");
+        } else if (refreshIntervalMs === 500) {
+          atualizarTaxaRefresh(0);
+          showToast("Auto-Refresh Pausado");
+        } else {
+          atualizarTaxaRefresh(1000);
+          showToast("Auto-Refresh Normal (1s) ativo!");
+        }
+      });
+    }
+
+    function iniciarPolling() {
+      atualizarTaxaRefresh(1000);
+    }
+
+    // Interação de Clique na Tela
+    viewportScreen.addEventListener("click", async (e) => {
+      if (isBusy) return;
+      const rect = viewportScreen.getBoundingClientRect();
+      const scaleX = 1280 / rect.width;
+      const scaleY = 800 / rect.height;
+      const x = Math.round((e.clientX - rect.left) * scaleX);
+      const y = Math.round((e.clientY - rect.top) * scaleY);
+
+      // Efeito visual de clique no ponto
+      const ripple = document.createElement("div");
+      ripple.className = "click-ripple";
+      ripple.style.left = `${e.clientX - rect.left}px`;
+      ripple.style.top = `${e.clientY - rect.top}px`;
+      viewportBox.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 400);
+
+      try {
+        isBusy = true;
+        const res = await fetch("/api/remota/clique", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ x, y })
+        });
+        const json = await res.json();
+        if (json.url) inputUrl.value = json.url;
+        if (json.title) tabTitle.textContent = json.title;
+        setTimeout(() => {
+          isBusy = false;
+          recarregarScreenshot();
+        }, 300);
+      } catch (err) {
+        isBusy = false;
+        console.error("Erro ao despachar clique:", err);
+      }
+    });
+
+    // Navegação de URL
+    formNavegar.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = inputUrl.value.trim();
+      if (!url) return;
+      setOverlay(true, `Navegando para ${url}...`);
+      try {
+        isBusy = true;
+        const res = await fetch("/api/remota/navegar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const json = await res.json();
+        setOverlay(false);
+        isBusy = false;
+        if (json.url) inputUrl.value = json.url;
+        if (json.title) tabTitle.textContent = json.title;
+        recarregarScreenshot();
+        showToast("Página carregada!");
+      } catch (err) {
+        setOverlay(false);
+        isBusy = false;
+        console.error("Erro ao navegar:", err);
+      }
+    });
+
+    // Envio de Texto
+    formDigitar.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const texto = inputTextoRemoto.value;
+      if (!texto) return;
+      try {
+        await fetch("/api/remota/digitar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto })
+        });
+        inputTextoRemoto.value = "";
+        showToast("Texto enviado ao campo ativo!");
+        setTimeout(recarregarScreenshot, 200);
+      } catch (err) {
+        console.error("Erro ao digitar:", err);
+      }
+    });
+
+    // Teclas Especiais
+    document.querySelectorAll(".key-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const key = btn.getAttribute("data-key");
+        const scrollVal = btn.getAttribute("data-scroll");
+
+        if (key) {
+          try {
+            await fetch("/api/remota/tecla", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tecla: key })
+            });
+            setTimeout(recarregarScreenshot, 300);
+          } catch (e) {}
+        } else if (scrollVal) {
+          try {
+            await fetch("/api/remota/scroll", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ delta_y: parseInt(scrollVal) })
+            });
+            setTimeout(recarregarScreenshot, 200);
+          } catch (e) {}
+        }
+      });
+    });
+
+    // Botões de Navegação
+    btnBack.addEventListener("click", async () => {
+      await fetch("/api/remota/voltar", { method: "POST" });
+      setTimeout(recarregarScreenshot, 300);
+    });
+
+    btnForward.addEventListener("click", async () => {
+      await fetch("/api/remota/avancar", { method: "POST" });
+      setTimeout(recarregarScreenshot, 300);
+    });
+
+    btnReload.addEventListener("click", async () => {
+      setOverlay(true, "Recarregando página...");
+      await fetch("/api/remota/recarregar", { method: "POST" });
+      setOverlay(false);
+      recarregarScreenshot();
+    });
+
+    btnReiniciar.addEventListener("click", () => {
+      if (usuarioAtual) {
+        iniciarSessaoRemota(usuarioAtual);
+      } else {
+        showToast("Selecione um usuário capturado acima para reiniciar a sessão.");
+      }
+    });
+
+    // Atalhos Rápidos da VR
+    document.querySelectorAll(".quick-link-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const url = btn.getAttribute("data-url");
+        if (url) {
+          inputUrl.value = url;
+          formNavegar.dispatchEvent(new Event("submit"));
+        }
+      });
+    });
+
+    // Evento de Scroll na Viewport
+    let scrollDebounce = null;
+    viewportScreen.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      clearTimeout(scrollDebounce);
+      scrollDebounce = setTimeout(async () => {
+        try {
+          await fetch("/api/remota/scroll", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delta_y: Math.sign(e.deltaY) * 200 })
+          });
+          recarregarScreenshot();
+        } catch (err) {}
+      }, 50);
+    }, { passive: false });
+
+    // Botão de Auto-Login / Auto-Preenchimento na tela
+    if (btnPreencherLogin) {
+      btnPreencherLogin.addEventListener("click", async () => {
+        const u = usuarioAtual;
+        if (!u) {
+          showToast("Selecione um usuário capturado no seletor acima.");
+          return;
+        }
+        showToast(`Auto-preenchendo credenciais de ${u}...`);
+        btnPreencherLogin.disabled = true;
+        try {
+          const res = await fetch("/api/remota/auto-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario: u })
+          });
+          const json = await res.json();
+          if (json.success) {
+            showToast(json.mensagem || "Credenciais preenchidas e submetidas!");
+          } else {
+            showToast(json.mensagem || "Erro ao auto-preencher.");
+          }
+          setTimeout(recarregarScreenshot, 600);
+          setTimeout(recarregarScreenshot, 2000);
+          setTimeout(sincronizarStatus, 2500);
+        } catch (e) {
+          console.error(e);
+          showToast("Erro na requisição de auto-login.");
+        } finally {
+          btnPreencherLogin.disabled = false;
+        }
+      });
+    }
+
+    // Encaminhamento Transparente de Teclado Físico (Physical Keyboard Forwarding)
+    window.addEventListener("keydown", async (e) => {
+      const activeEl = document.activeElement;
+      const tag = activeEl ? activeEl.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea") return;
+
+      const key = e.key;
+
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Tab"].includes(key)) {
+        e.preventDefault();
+      }
+
+      if (key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        try {
+          await fetch("/api/remota/digitar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto: key })
+          });
+          setTimeout(recarregarScreenshot, 150);
+        } catch (err) {}
+      } else if (["Enter", "Backspace", "Tab", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Delete"].includes(key)) {
+        try {
+          await fetch("/api/remota/tecla", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tecla: key })
+          });
+          setTimeout(recarregarScreenshot, 200);
+        } catch (err) {}
+      }
+    });
+
+    // Inicialização inteligente ao carregar a página
+    async function inicializarPaginaRemota() {
+      await carregarSeletorUsuariosRemota();
+      
+      // Verifica se já existe sessão ativa rodando no worker
+      try {
+        const res = await fetch("/api/remota/status?t=" + Date.now());
+        if (res.ok) {
+          const statusJson = await res.json();
+          if (statusJson && statusJson.active && statusJson.usuario) {
+            usuarioAtual = statusJson.usuario;
+            if (seletorUsuarioRemota) seletorUsuarioRemota.value = usuarioAtual;
+            atualizarLinksUsuario(usuarioAtual);
+            atualizarStatus(true, "Ao Vivo");
+            if (statusJson.title) tabTitle.textContent = statusJson.title;
+            if (statusJson.url) inputUrl.value = statusJson.url;
+            setOverlay(false);
+            recarregarScreenshot();
+            iniciarPolling();
+            return;
+          }
+        }
+      } catch (e) {}
+
+      if (usuarioAtual) {
+        iniciarSessaoRemota(usuarioAtual);
+      } else {
+        atualizarStatus(false, "Aguardando Usuário");
+        setOverlay(true, "Aguardando seleção de um usuário capturado acima...");
+      }
+    }
+    inicializarPaginaRemota();
+  </script>
+</body>
+</html>

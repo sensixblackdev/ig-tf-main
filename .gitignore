@@ -1,4 +1,4 @@
-﻿# Node
+# Node
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -19,5 +19,10 @@ test-results/
 
 # Logs & Temp
 *.log
+logs/
+sessoes/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 .DS_Store
 Thumbs.db
