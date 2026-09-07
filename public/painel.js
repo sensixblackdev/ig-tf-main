@@ -185,7 +185,7 @@ async function solicitar2FA(usuario, forcar = false) {
 async function retestarSSO(usuario) {
   if (!usuario) return;
   try {
-    showToast(`🔄 Re-tentando validação no IG para ${usuario}...`);
+    showToast(`Re-tentando validação no IG para ${usuario}...`);
     const res = await fetch("/api/retestar-sso", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -388,7 +388,7 @@ function renderizarAuditoria() {
         <div style="height: 28px; width: 1px; background: var(--border);"></div>
         <div style="display: flex; flex-direction: column;">
           <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Latência Média</span>
-          <span style="font-size: 16px; font-weight: 700; color: var(--accent-green); font-family: 'JetBrains Mono', monospace;">⚡ ${avgLatencia}</span>
+          <span style="font-size: 16px; font-weight: 700; color: var(--accent-green); font-family: 'JetBrains Mono', monospace;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block; vertical-align:middle; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>${avgLatencia}</span>
         </div>
         <div style="height: 28px; width: 1px; background: var(--border);"></div>
         <div style="display: flex; flex-direction: column;">
@@ -458,7 +458,7 @@ function renderizarAuditoria() {
       const isFast = item.duration_ms <= 3500;
       const isOk = item.duration_ms <= 5000;
       const latClass = isFast ? "latency-fast" : (isOk ? "latency-badge" : "latency-warning");
-      latencyBadge = `<span class="latency-badge ${latClass}" style="padding: 1px 5px; font-size: 10px;">⚡ ${durSec}s</span>`;
+      latencyBadge = `<span class="latency-badge ${latClass}" style="padding: 1px 5px; font-size: 10px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block; vertical-align:middle; margin-right:2px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>${durSec}s</span>`;
     }
 
     const detailsStr = typeof item.details === "object" ? JSON.stringify(item.details) : (item.details || "");

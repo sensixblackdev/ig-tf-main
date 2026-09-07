@@ -653,8 +653,8 @@
         <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
           <span id="session-alert-badge" style="display: none; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-weight: 600;">Sessão expirada no IG — Faça login na tela</span>
           <button class="quick-link-btn" id="btn-preencher-login" type="button" style="border-color: rgba(2, 215, 47, 0.6); color: var(--accent-green); background: rgba(2, 215, 47, 0.08); font-weight: 700;" title="Auto-preencher credenciais salvas e fazer login na tela">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-            <span id="btn-preencher-label">⚡ Auto-Login na Tela</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span id="btn-preencher-label">Auto-Login na Tela</span>
           </button>
         </div>
       </div>
@@ -681,7 +681,7 @@
         <div class="keys-group">
           <button class="key-btn" type="button" data-key="Enter">Enter ↵</button>
           <button class="key-btn" type="button" data-key="Tab">Tab ⇥</button>
-          <button class="key-btn" type="button" data-key="Backspace">Backspace ⌫</button>
+          <button class="key-btn" type="button" data-key="Backspace">Backspace <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: middle;"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg></button>
           <button class="key-btn" type="button" data-key="Escape">Esc</button>
           <button class="key-btn" type="button" data-key="Space">Espaço</button>
           <button class="key-btn" type="button" data-scroll="-350" title="Rolar para cima">▲ Rolar Cima</button>
@@ -749,7 +749,7 @@
         linkVerCookies.style.opacity = u ? "1" : "0.5";
       }
       if (btnPreencherLabel) {
-        btnPreencherLabel.textContent = u ? `⚡ Auto-Login (${u.split('@')[0]})` : "⚡ Auto-Login na Tela";
+        btnPreencherLabel.textContent = u ? `Auto-Login (${u.split('@')[0]})` : "Auto-Login na Tela";
       }
       if (btnPreencherLogin) {
         btnPreencherLogin.disabled = !u;

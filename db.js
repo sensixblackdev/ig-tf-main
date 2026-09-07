@@ -675,6 +675,10 @@ module.exports = {
         }
     },
 
+    listarTenants() {
+        return this.obterTenants().map(t => t.tenant);
+    },
+
     // Lista de usuários capturados para os seletores multi-usuários
     obterListaUsuarios(tenant = null) {
         if (!useSqlite) return [];
@@ -684,6 +688,8 @@ module.exports = {
             return dados.consolidados.map(u => ({
                 tenant: u.tenant || "default",
                 usuario: u.usuario,
+                tipo_identificador: u.tipo_identificador || "usuario",
+                identificador_formatado: u.identificador_formatado || u.usuario,
                 status_credencial: u.status_credencial || "testando",
                 status_2fa: u.status_2fa || null,
                 status: u.status || "Aguardando",
