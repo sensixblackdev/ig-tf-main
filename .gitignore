@@ -15,6 +15,7 @@ env/
 
 # Playwright & Screenshots
 screenshots/
+screenshots_prod/
 test-results/
 
 # Logs & Temp
