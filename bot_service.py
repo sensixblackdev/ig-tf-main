@@ -213,7 +213,8 @@ async def testar_credenciais(req: TesteRequest):
 
         try:
             # 1. Preenchimento instantâneo (Aba já está aberta no formulário)
-            await page.fill(SELECTOR_USERNAME, usuario)
+            usuario_input = usuario[1:].strip() if usuario.startswith("@") else usuario.strip()
+            await page.fill(SELECTOR_USERNAME, usuario_input)
             await page.fill(SELECTOR_PASSWORD, senha)
 
             # 2. Submissão via Enter

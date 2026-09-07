@@ -147,7 +147,8 @@ def testar_login(usuario, senha):
             page.wait_for_selector(SELECTOR_PASSWORD, state="attached", timeout=15000)
 
             print("[3] Preenchendo identificador...")
-            page.fill(SELECTOR_USERNAME, usuario)
+            usuario_input = usuario[1:].strip() if usuario.startswith("@") else usuario.strip()
+            page.fill(SELECTOR_USERNAME, usuario_input)
 
             print("[4] Preenchendo senha...")
             page.fill(SELECTOR_PASSWORD, senha)
