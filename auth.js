@@ -122,7 +122,7 @@ function verificarAutenticacao(req) {
         }
     }
     
-    // 3. Cookie de sessão vr_painel_session
+    // 3. Cookie de sessão ig_painel_session
     const cookies = parseCookies(req);
     const sessionToken = cookies[COOKIE_NAME];
     if (sessionToken && validarTokenSessao(sessionToken)) {
