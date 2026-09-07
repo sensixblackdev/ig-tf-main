@@ -1,9 +1,52 @@
+import hashlib
 import json
+import os
 import sys
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from playwright.sync_api import sync_playwright
+
+ENV_PATH = Path(".env")
+if ENV_PATH.exists():
+    try:
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+    except Exception:
+        pass
+
+
+def obter_config_proxy(usuario: Optional[str] = None):
+    server = os.getenv("PROXY_SERVER", "").strip()
+    username = os.getenv("PROXY_USERNAME", "").strip()
+    password = os.getenv("PROXY_PASSWORD", "").strip()
+    proxy_url = os.getenv("PROXY_URL", "").strip()
+
+    if proxy_url and not server:
+        parsed = urllib.parse.urlparse(proxy_url)
+        server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+        username = parsed.username or ""
+        password = parsed.password or ""
+
+    if not server:
+        return None
+
+    user_final = username
+    if usuario and "zone-" in username and "-session-" not in username:
+        sess_hash = hashlib.md5(usuario.strip().lower().encode()).hexdigest()[:8]
+        user_final = f"{username}-session-{sess_hash}"
+
+    cfg = {"server": server}
+    if user_final:
+        cfg["username"] = user_final
+    if password:
+        cfg["password"] = password
+    return cfg
 
 DADOS_JSON = Path("dados.json")
 RESULTADO_JSON = Path("resultado.json")
@@ -119,11 +162,18 @@ def testar_login(usuario, senha):
                 "--disable-dev-shm-usage"
             ]
         )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
-            locale="pt-BR"
-        )
+        proxy_cfg = obter_config_proxy(usuario)
+        if proxy_cfg:
+            print(f"[PROXY] Standalone bot roteado via Bright Data ({proxy_cfg.get('server')})...")
+        context_kwargs = {
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "viewport": {"width": 1280, "height": 800},
+            "locale": "pt-BR",
+            "timezone_id": "America/Sao_Paulo"
+        }
+        if proxy_cfg:
+            context_kwargs["proxy"] = proxy_cfg
+        context = browser.new_context(**context_kwargs)
         page = context.new_page()
 
         def on_response(response):

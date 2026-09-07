@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=IG TF CAA Auth Worker (Playwright FastAPI)
 After=network.target
 
@@ -11,6 +11,7 @@ Restart=always
 RestartSec=5
 Environment=HOST=127.0.0.1
 Environment=PORT=3006
+EnvironmentFile=-/opt/ig-tf-main/.env
 
 [Install]
 WantedBy=multi-user.target

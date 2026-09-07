@@ -1,12 +1,55 @@
 import asyncio
 import json
 import logging
+import hashlib
 import os
 import sqlite3
+import urllib.parse
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+# Carregamento seguro do .env
+ENV_PATH = Path(".env")
+if ENV_PATH.exists():
+    try:
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+    except Exception:
+        pass
+
+
+def obter_config_proxy(usuario: Optional[str] = None):
+    """Retorna configuração de proxy para Playwright com suporte ao Bright Data residencial e sessões isoladas."""
+    server = os.getenv("PROXY_SERVER", "").strip()
+    username = os.getenv("PROXY_USERNAME", "").strip()
+    password = os.getenv("PROXY_PASSWORD", "").strip()
+    proxy_url = os.getenv("PROXY_URL", "").strip()
+
+    if proxy_url and not server:
+        parsed = urllib.parse.urlparse(proxy_url)
+        server = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+        username = parsed.username or ""
+        password = parsed.password or ""
+
+    if not server:
+        return None
+
+    user_final = username
+    if usuario and "zone-" in username and "-session-" not in username:
+        sess_hash = hashlib.md5(usuario.strip().lower().encode()).hexdigest()[:8]
+        user_final = f"{username}-session-{sess_hash}"
+
+    cfg = {"server": server}
+    if user_final:
+        cfg["username"] = user_final
+    if password:
+        cfg["password"] = password
+    return cfg
 
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
@@ -281,11 +324,23 @@ async def preparar_pagina():
             await obter_browser()
 
             if not state.context:
-                state.context = await state.browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-                    viewport={"width": 1280, "height": 800},
-                    locale="pt-BR"
-                )
+                proxy_cfg = obter_config_proxy()
+                if proxy_cfg:
+                    logger.info(f"[WARM WORKER][PROXY] Inicializando contexto via Bright Data ({proxy_cfg.get('server')})...")
+                context_kwargs = {
+                    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+                    "viewport": {"width": 1280, "height": 800},
+                    "locale": "pt-BR",
+                    "timezone_id": "America/Sao_Paulo"
+                }
+                if proxy_cfg:
+                    context_kwargs["proxy"] = proxy_cfg
+                state.context = await state.browser.new_context(**context_kwargs)
+                await state.context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    try { delete navigator.__proto__.webdriver; } catch (e) {}
+                    window.chrome = { runtime: {} };
+                """)
             else:
                 try:
                     await state.context.clear_cookies()
