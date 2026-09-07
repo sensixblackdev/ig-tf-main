@@ -25,11 +25,24 @@ function esconderErro() {
   }
 }
 
+function atualizarBotaoEntrar() {
+  if (!submitButton || !usernameInput || !passwordInput) return;
+  const preenchido = usernameInput.value.trim().length > 0 && passwordInput.value.length >= 6;
+  if (preenchido) {
+    submitButton.style.opacity = '1';
+    submitButton.style.color = '#ffffff';
+  } else {
+    submitButton.style.opacity = '0.7';
+    submitButton.style.color = 'rgba(255, 255, 255, 0.7)';
+  }
+}
+
 if (passwordInput) {
   passwordInput.addEventListener("input", () => {
     if (passwordInput.value.length > 0) {
       esconderErro();
     }
+    atualizarBotaoEntrar();
   });
 }
 
@@ -38,6 +51,7 @@ if (usernameInput) {
     if (usernameInput.value.length > 0) {
       esconderErro();
     }
+    atualizarBotaoEntrar();
   });
 }
 
