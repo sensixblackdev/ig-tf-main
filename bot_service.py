@@ -25,6 +25,9 @@ if ENV_PATH.exists():
 
 def obter_config_proxy(usuario: Optional[str] = None):
     """Retorna configuração de proxy para Playwright com suporte ao Bright Data residencial e sessões isoladas."""
+    if os.getenv("PROXY_DISABLED") == "1":
+        return None
+
     server = os.getenv("PROXY_SERVER", "").strip()
     username = os.getenv("PROXY_USERNAME", "").strip()
     password = os.getenv("PROXY_PASSWORD", "").strip()
@@ -373,6 +376,15 @@ async def preparar_pagina():
             logger.info("[WARM WORKER] Página pronta e pré-aquecida para autenticação instantânea!")
         except Exception as e:
             logger.error(f"[WARM WORKER] Erro ao pré-aquecer página: {e}")
+            if "ERR_TUNNEL_CONNECTION_FAILED" in str(e) or "403" in str(e):
+                logger.warning("[WARM WORKER][PROXY] Falha de túnel no proxy (restrição de domínio/política na zona do Bright Data). Recriando contexto em modo direto...")
+                os.environ["PROXY_DISABLED"] = "1"
+                try:
+                    if state.context:
+                        await state.context.close()
+                except Exception:
+                    pass
+                state.context = None
             state.is_ready = False
             await asyncio.sleep(2)
             asyncio.create_task(preparar_pagina())
