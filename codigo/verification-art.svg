@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1042 470">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe0f2"/>
+      <stop offset="1" stop-color="#c3d0ff"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#f9fbff"/>
+      <stop offset="1" stop-color="#d9efff"/>
+    </linearGradient>
+    <linearGradient id="mail" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#3b8dff"/>
+      <stop offset="1" stop-color="#5a04e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1042" height="470" fill="url(#sky)"/>
+  <circle cx="239" cy="136" r="52" fill="#ff8870"/>
+  <circle cx="793" cy="319" r="72" fill="#ff8a71"/>
+  <circle cx="163" cy="380" r="45" fill="#f88266"/>
+  <g transform="translate(315 45) rotate(2 215 230)">
+    <rect x="0" y="0" width="440" height="510" rx="47" fill="#384e5d"/>
+    <rect x="16" y="15" width="408" height="490" rx="37" fill="url(#screen)"/>
+    <circle cx="218" cy="30" r="6" fill="#405461"/>
+    <circle cx="46" cy="62" r="14" fill="#a9c8ff"/>
+    <rect x="92" y="51" width="170" height="20" rx="10" fill="#9ebaff"/>
+    <rect x="45" y="111" width="117" height="9" rx="4" fill="#a1baff"/>
+    <rect x="45" y="138" width="344" height="9" rx="4" fill="#9ebaff"/>
+    <rect x="45" y="158" width="344" height="9" rx="4" fill="#9ebaff"/>
+    <rect x="45" y="178" width="344" height="9" rx="4" fill="#9ebaff"/>
+    <text x="42" y="275" fill="#0066c9" font-family="Arial, sans-serif" font-size="70" font-weight="bold">******</text>
+    <rect x="45" y="305" width="344" height="10" rx="5" fill="#9ebaff"/>
+    <rect x="45" y="327" width="344" height="10" rx="5" fill="#9ebaff"/>
+    <rect x="45" y="349" width="280" height="10" rx="5" fill="#9ebaff"/>
+    <rect x="315" y="45" width="70" height="56" rx="10" fill="url(#mail)"/>
+    <path d="m319 51 31 26 31-26" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M735 470c-15-83 15-209 58-220 30-7 46 28 37 68l-9 46 38 106Z" fill="#ed725e"/>
+  <path d="M303 470c-2-45 21-123 48-147 18-16 52 0 49 32l-13 115Z" fill="#a8321e"/>
+  <path d="M298 470c-15-71 0-112 20-129 20-16 39-5 38 18l-13 111Z" fill="#db482c"/>
+</svg>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifique seu email</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <main class="verification-page">
+    <div class="verification-card">
+      <p class="account-name">Instagram</p>
+      <h1 id="verification-title">Verifique seu email</h1>
+      <p class="instructions">Insira o código que enviamos para <span id="masked-identifier">seu contato</span></p>
+
+      <div class="verification-art" aria-hidden="true">
+        <img src="verification-art.svg" alt="">
+      </div>
+
+      <form id="verification-form">
+        <label for="code">Código</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+        <p class="delivery-note"><span class="refresh-icon" aria-hidden="true">↻</span> Pode levar alguns minutos para você receber o código. <a href="#">Receber um novo código</a></p>
+        <button class="continue-button" type="submit">Continuar</button>
+      </form>
+      <button class="alternate-button" type="button">Tentar outro método</button>
+      <p class="feedback" id="feedback" role="status"></p>
+    </div>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
