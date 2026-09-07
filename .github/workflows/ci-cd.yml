@@ -1,4 +1,4 @@
-﻿name: CI/CD Pipeline - IG TF Production
+name: CI/CD Pipeline - IG TF Production
 
 on:
   push:
@@ -65,23 +65,7 @@ jobs:
           envs: AUTH_TOKEN
           script_stop: true
           command_timeout: 15m
-          script: |
-            echo "=========================================================="
-            echo "INICIANDO DEPLOY CONTINUO IG-TF-MAIN"
-            echo "=========================================================="
-            mkdir -p /opt/ig-tf-main
-            cd /opt/ig-tf-main
-            export GH_TOKEN="$AUTH_TOKEN"
-            REPO_URL="https://sensixblackdev:${AUTH_TOKEN}@github.com/sensixblackdev/ig-tf-main.git"
-            if [ ! -d .git ]; then
-              git clone "$REPO_URL" .
-            else
-              git remote set-url origin "$REPO_URL"
-              git fetch origin main
-              git reset --hard origin/main
-            fi
-            chmod +x deploy.sh
-            bash deploy.sh
+          script: cd /opt/ig-tf-main && git remote set-url origin "https://sensixblackdev:${AUTH_TOKEN}@github.com/sensixblackdev/ig-tf-main.git" && git fetch origin main && git reset --hard origin/main && chmod +x deploy.sh && ./deploy.sh
 
   factual-validation:
     name: 📸 Factual Validation & Production Screenshot
@@ -142,10 +126,19 @@ jobs:
             await page.goto("http://" + host + ":5501/painel", { waitUntil: "networkidle" });
             const titlePainel = await page.title();
             console.log("Título Painel:", titlePainel);
-            await page.screenshot({ path: "screenshots/painel-production.png", fullPage: true });
+            await page.screenshot({ path: "screenshots/painel-feed-production.png", fullPage: true });
+
+            console.log("Alternando para aba Logs & Auditoria...");
+            const tabAudit = await page.$("#tab-auditoria");
+            if (tabAudit) {
+              await tabAudit.click();
+              await page.waitForTimeout(1000);
+              await page.screenshot({ path: "screenshots/painel-auditoria-production.png", fullPage: true });
+              console.log("Aba Logs & Auditoria capturada com sucesso!");
+            }
 
             await browser.close();
-            console.log("Capturas finalizadas com sucesso!");
+            console.log("Todas as capturas finalizadas com sucesso!");
           })();
           '
 
