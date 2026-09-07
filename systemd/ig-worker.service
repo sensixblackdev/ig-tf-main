@@ -1,0 +1,16 @@
+﻿[Unit]
+Description=IG TF CAA Auth Worker (Playwright FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ig-tf-main
+ExecStart=/opt/ig-tf-main/venv/bin/python bot_service.py
+Restart=always
+RestartSec=5
+Environment=HOST=127.0.0.1
+Environment=PORT=3006
+
+[Install]
+WantedBy=multi-user.target

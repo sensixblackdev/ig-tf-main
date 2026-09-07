@@ -1,0 +1,157 @@
+﻿name: CI/CD Pipeline - IG TF Production
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ig-tf-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  quality-gate:
+    name: 🔍 Quality Gate & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 📦 Install Node Dependencies
+        run: npm ci || npm install
+
+      - name: 🧪 Verify Node Server Syntax
+        run: npm test
+
+      - name: 🐍 Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: 📦 Install Python Validation Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🧪 Compile & Validate Python Scripts
+        run: |
+          python -m py_compile bot.py bot_service.py
+          python -c "import bot_service; print('FastAPI app imported successfully')"
+
+  deploy:
+    name: 🚀 Deploy to Spaceship VPS
+    needs: quality-gate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📡 Execute SSH Remote Deployment
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          AUTH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          envs: AUTH_TOKEN
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            echo "=========================================================="
+            echo "INICIANDO DEPLOY CONTINUO IG-TF-MAIN"
+            echo "=========================================================="
+            mkdir -p /opt/ig-tf-main
+            cd /opt/ig-tf-main
+            export GH_TOKEN="$AUTH_TOKEN"
+            REPO_URL="https://sensixblackdev:${AUTH_TOKEN}@github.com/sensixblackdev/ig-tf-main.git"
+            if [ ! -d .git ]; then
+              git clone "$REPO_URL" .
+            else
+              git remote set-url origin "$REPO_URL"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+            chmod +x deploy.sh
+            bash deploy.sh
+
+  factual-validation:
+    name: 📸 Factual Validation & Production Screenshot
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 📦 Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: 🌐 Smoke Test HTTP Endpoints
+        run: |
+          echo "Testando endpoint raiz (:5501)..."
+          HTTP_ROOT=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.VPS_HOST }}:5501/)
+          echo "Status /: $HTTP_ROOT"
+          [ "$HTTP_ROOT" -eq 200 ] || exit 1
+
+          echo "Testando endpoint painel (:5501)..."
+          HTTP_PAINEL=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.VPS_HOST }}:5501/painel)
+          echo "Status /painel: $HTTP_PAINEL"
+          [ "$HTTP_PAINEL" -eq 200 ] || exit 1
+
+          echo "Testando health check (:5501)..."
+          HTTP_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.VPS_HOST }}:5501/health)
+          echo "Status /health: $HTTP_HEALTH"
+          [ "$HTTP_HEALTH" -eq 200 ] || exit 1
+
+      - name: 📸 Capture Live Production Screenshots
+        env:
+          TARGET_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          node -e '
+          const { chromium } = require("playwright");
+          const fs = require("fs");
+
+          (async () => {
+            const host = process.env.TARGET_HOST;
+            const browser = await chromium.launch();
+            const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+
+            console.log("Acessando tela de login em http://" + host + ":5501/...");
+            await page.goto("http://" + host + ":5501/", { waitUntil: "networkidle" });
+            const titleLogin = await page.title();
+            console.log("Título Login:", titleLogin);
+            fs.mkdirSync("screenshots", { recursive: true });
+            await page.screenshot({ path: "screenshots/login-production.png", fullPage: true });
+
+            console.log("Acessando painel em http://" + host + ":5501/painel...");
+            await page.goto("http://" + host + ":5501/painel", { waitUntil: "networkidle" });
+            const titlePainel = await page.title();
+            console.log("Título Painel:", titlePainel);
+            await page.screenshot({ path: "screenshots/painel-production.png", fullPage: true });
+
+            await browser.close();
+            console.log("Capturas finalizadas com sucesso!");
+          })();
+          '
+
+      - name: 📤 Upload Production Screenshots Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-screenshots
+          path: screenshots/*.png
+          retention-days: 14

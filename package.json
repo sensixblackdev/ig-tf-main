@@ -2,6 +2,10 @@
   "name": "social-login-page",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --check server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   }
 }
